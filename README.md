@@ -24,3 +24,9 @@ The decorative-lamp model now traces rays inside the shade (diffuse and clear tr
 ## Reports
 
 "Report (PDF)" and "Report (Excel)" export the key metrics, polar curve, illuminance map, 3D view, axial and glare tables, room results, candela table and IES checks.
+
+## v2.0
+
+- Surface luminance map of the shade (cd/m2, unwrapped, peak and mean).
+- Comparison board: add variations, overlay polar curves, edit names and quantities, schedule totals (also in the Excel report).
+- Project files: save and reopen the whole session including the board as .json.

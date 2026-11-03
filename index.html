@@ -125,7 +125,7 @@ svg.lamp text{font:400 10px var(--f-mono);fill:var(--mute)}
 <div class="wrap">
 <header class="top">
   <div>
-    <h1>Candela Bench <small>v1.9</small></h1>
+    <h1>Candela Bench <small>v2.0</small></h1>
     <p class="sub">Pick a fixture, adjust a few settings, check the light, and save an IES file.</p>
   </div>
   <span class="badge">Computed photometry · not LM-79 lab data</span>
@@ -221,6 +221,14 @@ svg.lamp text{font:400 10px var(--f-mono);fill:var(--mute)}
       </div>
       <details id="cdDet" style="margin-top:12px"><summary>Candela table</summary><div class="scroll cdt" id="cdTable"></div></details>
       </div>
+    </details>
+    <details class="card more" id="lumCard" hidden><summary>Surface luminance <span class="hint">how bright the shade looks, cd/m²</span></summary>
+      <div class="dbody"><canvas id="lumMap" aria-label="Unwrapped luminance map of the shade"></canvas><div class="metrics" id="lumStats" style="margin-top:10px"></div><p class="note" id="lumNote"></p></div>
+    </details>
+    <details class="card more" id="boardCard"><summary>Compare designs and project <span class="hint">board, schedule, save and open project</span></summary>
+      <div class="dbody"><div class="pre"><button class="btn primary" id="bAdd">Add current design to board</button><button class="btn" id="bProjSave">Save project (.json)</button><button class="btn" id="bProjOpen">Open project</button><input type="file" id="projFile" accept=".json" hidden></div>
+      <canvas id="boardPolar" aria-label="Polar overlay of the designs on the board"></canvas><div class="legend" id="boardLeg"></div>
+      <div class="scroll" style="margin-top:10px"><table id="boardTab"></table></div></div>
     </details>
     <details class="card more"><summary>IES file text <span class="hint" id="iesMeta"></span></summary>
       <div class="dbody"><pre id="ies" tabindex="0"></pre></div>
@@ -976,7 +984,7 @@ function* trMain(Q,ax){
   const rel=yield* trFar(G,Q,ax,tal,hist,N);
   const om=cellOmega(ax),lorNee=fluxGrid(rel,om),lor=st.esc/N,sc=f=>{let T=Q.T*f,R=Q.R*f;const room=98-Q.Ts-Q.Rs,sum=T+R;if(sum>room&&sum>0){T*=room/sum;R*=room/sum}return Object.assign({},Q,{T,R})};
   const lo=yield* trLor(sc(1-Q.unc),30000,99),hi=yield* trLor(sc(1+Q.unc),30000,99);
-  return{rel,lor,lorNee,lorLo:Math.min(lo,lor),lorHi:Math.max(hi,lor),N};
+  return{rel,lor,lorNee,lorLo:Math.min(lo,lor),lorHi:Math.max(hi,lor),N,lum:trLum(G,Q,tal,N)};
 }
 function slice(gen,live,onProg,onDone){
   const step=()=>{
@@ -1377,7 +1385,7 @@ function renderOutNote(){
   const t=dm.shape==='point'?'point source':dm.shape==='sphere'?`sphere Ø ${nstr(dm.w*1000,0)} mm`:dm.shape==='circle'?`circle Ø ${nstr(dm.w*1000,0)} mm`:dm.shape==='cyl'?`cylinder Ø ${nstr(dm.w*1000,0)} × ${nstr(dm.h*1000,0)} mm`:`${nstr(dm.w*1000,0)} × ${nstr(dm.l*1000,0)} mm`;
   $('dimsNote').textContent=S.tab==='dist'||S.tab==='imp'?'':'opening: '+t;
 }
-function drawPlots(){drawPolar();drawIso();draw3D();if(ROOM)drawRoom()}
+function drawPlots(){drawPolar();drawIso();draw3D();drawLum();drawBoard();if(ROOM)drawRoom()}
 let raf=0;
 function schedule(){if(!raf)raf=requestAnimationFrame(()=>{raf=0;update()})}
 function update(){
@@ -1578,6 +1586,7 @@ function reportXlsx(){
   const ag=[[b('Axial illuminance')],[b('Distance m'),b('Peak lux'),b('Dia 50% C0 m'),b('Dia 50% C90 m')],...d.ax.map(r=>[r[0],n(r[1]),r[2]==='-'?'-':+r[2],r[3]==='-'?'-':+r[3]]),[],[b('Glare luminance')],[b('gamma deg'),b('Max cd'),b('cd/klm'),b('cd/m2')],...d.gl.map(r=>[r[0],n(r[1]),n(r[2]),isFinite(r[3])?n(r[3]):'-'])];
   const sheets=[{name:'Summary',rows:sum,widths:[26,70]},{name:'Candela',rows:cd,widths:[16]},{name:'Axial and glare',rows:ag,widths:[18,14,14,14]}];
   if(d.R){sheets.push({name:'Room',rows:[[b('Room calculation')],...d.R.kv,[],[b('Surface'),b('Reflectance %'),b('Em lx'),b('Emin lx'),b('Emax lx')],...d.R.rows.map(r=>[r[0],r[1]==null?'-':n(r[1]),n(r[2]),n(r[3]),n(r[4])])],widths:[24,14,12,12,12]})}
+  if(BOARD.length){let L=0,W=0;const rows=[[b('Design'),b('Qty'),b('Lumens each'),b('Watts each'),b('lm/W'),b('Peak cd'),b('Beam 50 %'),b('Down %'),b('Shade LOR %'),b('CCT K'),b('CRI')]];BOARD.forEach(x=>{const m=x.m;L+=m.flux*x.qty;W+=m.watts*x.qty;rows.push([x.label,x.qty,n(m.flux),n(m.watts),m.watts>0?n(m.flux/m.watts):'-',n(m.peak),m.b50>=355?'omni':n(m.b50),n(m.down*100),m.lor==null?'-':n(m.lor*100),m.cct,m.cri])});rows.push([],[b('Total lumens'),'',n(L)],[b('Total watts'),'',n(W)]);sheets.push({name:'Board and schedule',rows,widths:[40,6,12,12,8,10,10,8,12,8,6]})}
   sheets.push({name:'IES file',rows:cur.text.replace(/\r\n/g,'\n').split('\n').map(l=>[l]),widths:[110]});
   return xlsxBuild(sheets);
 }
@@ -1651,8 +1660,126 @@ function pdfReport(){
 $('bPdf').addEventListener('click',()=>{if(!cur.P)return;try{save(fname()+'_report.pdf',pdfReport())}catch(e){toast('Could not build the PDF.');console.error(e)}});
 $('bXls').addEventListener('click',()=>{if(!cur.P)return;try{save(fname()+'_report.xlsx',reportXlsx())}catch(e){toast('Could not build the workbook.');console.error(e)}});
 
+/* ---------------- surface luminance, comparison board, project ---------------- */
+function trLum(G,Q,tal,N){
+  const NB=trNB(Q),out=[],TP=2*Math.PI;
+  if(G.mesh){
+    const m=G.mesh,tr=m.tr;
+    for(let i=0;i<G.n;i++){
+      const f=tal[i*2]/N;if(f<=0)continue;
+      const i3=3*i,cx=m.E1[i3+1]*m.E2[i3+2]-m.E1[i3+2]*m.E2[i3+1],cy=m.E1[i3+2]*m.E2[i3]-m.E1[i3]*m.E2[i3+2],cz=m.E1[i3]*m.E2[i3+1]-m.E1[i3+1]*m.E2[i3];
+      const A=.5*Math.hypot(cx,cy,cz);if(A<1e-12)continue;
+      const pc=Math.atan2(m.cen[i3+1],m.cen[i3]),poly=[];
+      for(let k=0;k<3;k++){let ph=Math.atan2(tr[9*i+3*k+1],tr[9*i+3*k]);while(ph-pc>Math.PI)ph-=TP;while(ph-pc<-Math.PI)ph+=TP;poly.push([ph,tr[9*i+3*k+2]])}
+      out.push({poly,A,f});
+    }
+    return out;
+  }
+  G.segs.forEach((s,i)=>{
+    const A=s.t===1?Math.PI*(s.ro*s.ro-s.ri*s.ri):Math.PI*(s.r0+s.r1)*Math.hypot(s.z1-s.z0,s.r1-s.r0);
+    for(let b=0;b<NB;b++){
+      const f=tal[(i*2)*NB+b]/N;if(A<1e-12)continue;
+      out.push({z0:s.t===1?s.z:s.z0,z1:s.t===1?s.z:s.z1,p0:b/NB*TP,p1:(b+1)/NB*TP,A:A/NB,f,cap:s.t===1});
+    }
+  });
+  return out;
+}
+function drawLum(){
+  const card=$('lumCard');card.hidden=S.tab!=='dec';if(card.hidden||!card.open)return;
+  const cv=$('lumMap'),inf=cur.info,res=(TR.res&&inf&&inf.traced)?TR.res:null;
+  const w=Math.max(260,cv.parentElement.clientWidth-28),h=Math.round(w*.52),c=setupCanvas(cv,w,h);
+  c.clearRect(0,0,w,h);c.font='11px '+css('--f-mono');c.fillStyle=css('--mute');c.textBaseline='middle';
+  if(!res||!res.lum){c.textAlign='center';c.fillText('Waiting for the ray trace…',w/2,h/2);$('lumStats').innerHTML='';return}
+  const LED=S.dec.ledLm>0?S.dec.ledLm:S.lumens/Math.max(1e-6,inf.lor),P=res.lum,TP=2*Math.PI;
+  let Lmax=0,sumLA=0,sumA=0,cnt=0;
+  for(const p of P){p.L=p.f*LED/(Math.PI*p.A);if(p.L>Lmax)Lmax=p.L;sumLA+=p.L*p.A;sumA+=p.A;cnt++}
+  const mean=sumA>0?sumLA/sumA:0,ml=40,mr=10,mt=8,mb=38,pw=w-ml-mr,ph=h-mt-mb,zb=inf.zb,zt=inf.zt;
+  const X=a=>ml+a/TP*pw,Y=z=>mt+(zt-z)/((zt-zb)||1)*ph;
+  c.fillStyle='#000';c.fillRect(ml,mt,pw,ph);
+  c.save();c.beginPath();c.rect(ml,mt,pw,ph);c.clip();
+  for(const p of P){
+    if(p.cap||!(p.L>0))continue;const col=ramp(p.L/Lmax);c.fillStyle=`rgb(${col[0]|0},${col[1]|0},${col[2]|0})`;
+    if(p.poly){for(const sh of[-TP,0,TP]){c.beginPath();p.poly.forEach((q,k)=>k?c.lineTo(X(q[0]+sh),Y(q[1])):c.moveTo(X(q[0]+sh),Y(q[1])));c.closePath();c.fill();c.strokeStyle=c.fillStyle;c.lineWidth=.6;c.stroke()}}
+    else c.fillRect(X(p.p0),Y(p.z1),Math.max(1,X(p.p1)-X(p.p0)+.6),Math.max(1,Y(p.z0)-Y(p.z1)+.6));
+  }
+  c.restore();
+  c.fillStyle=css('--mute');c.textAlign='center';
+  for(const a of[0,90,180,270,360])c.fillText(a+'°',X(a*RAD),mt+ph+10);
+  c.textAlign='right';c.fillText(nstr(zt*1000,0),ml-4,mt+6);c.fillText(nstr(zb*1000,0),ml-4,mt+ph-4);c.fillText('mm',ml-4,mt+ph/2);
+  const gx=ml,gy=h-14,gw=pw;for(let i=0;i<gw;i++){const q=ramp(i/gw);c.fillStyle=`rgb(${q[0]|0},${q[1]|0},${q[2]|0})`;c.fillRect(gx+i,gy,1,7)}
+  c.textAlign='left';c.fillStyle=css('--mute');c.fillText('0',gx,gy-4);c.textAlign='right';c.fillText(kfmt(Lmax)+' cd/m²',gx+gw,gy-4);
+  const m=(a,b,t)=>`<div class="m"><i>${a}</i><b>${b}</b><em>${t}</em></div>`;
+  $('lumStats').innerHTML=m('Peak luminance',kfmt(Lmax)+' cd/m²','brightest patch')+m('Mean luminance',kfmt(mean)+' cd/m²','area weighted')+m('Peak / mean',nstr(Lmax/Math.max(mean,1e-9),1)+'×','evenness')+m('Shade area',nstr(sumA*1e4,0)+' cm²','emitting surfaces');
+  $('lumNote').textContent=(Lmax>10000?'Peak above 10 000 cd/m²: uncomfortable to look at directly, consider a thicker diffuser. ':Lmax>3000?'Bright but common for decorative lamps. ':'')+'Unwrapped around the lamp axis, outside surface. Holes and cut-outs show as dark.';
+}
+/* board */
+let BOARD=[];
+const BCOL=['#b5521b','#1f77b4','#2a9d5c','#8e44ad','#c0392b','#16a085','#7f8c8d','#d4a017'];
+function boardSnap(){
+  if(!cur.P||!cur.A)return null;const a=cur.A,inf=cur.info;
+  const d=S.tab==='dec'?`${S.dec.mode==='mesh'?'mesh':S.dec.preset} ${S.dec.mat}`:S.tab==='dist'?`${S.dist.profile} ${S.dist.beamA}°`:S.tab==='opt'?S.opt.type:'imported';
+  return{id:Date.now()+Math.random(),qty:1,label:`${S.name||'Luminaire'} · ${d}`,snap:structuredClone(S),
+    m:{flux:a.flux,watts:S.watts,peak:a.peak,b50:a.b50A,down:a.flux>0?a.down/a.flux:0,cct:S.cct,cri:S.cri,lor:S.tab==='dec'&&inf&&inf.lor!=null?inf.lor:null},
+    P:{v:cur.P.v.slice(),h:cur.P.h.slice(),cd:cur.P.cd.map(r=>r.slice())}};
+}
+function drawBoard(){
+  const card=$('boardCard');if(!card.open)return;
+  const cv=$('boardPolar'),w=Math.max(260,cv.parentElement.clientWidth-28),h=Math.min(w,420),c=setupCanvas(cv,w,h);
+  const items=BOARD.map((b,i)=>({P:b.P,col:BCOL[i%BCOL.length],dash:[],label:b.label}));
+  if(cur.P)items.push({P:cur.P,col:css('--ink'),dash:[5,4],label:'current design'});
+  const cx=w/2,cy=h/2,R=Math.min(w,h)/2-26,mute=css('--mute'),grid=css('--grid');
+  c.clearRect(0,0,w,h);c.font='11px '+css('--f-mono');c.textAlign='center';c.textBaseline='middle';
+  const pr=items.map(it=>planeProfile(it.P,0));let mx=0;pr.forEach(a=>a.forEach(x=>{mx=Math.max(mx,x)}));
+  if(!(mx>0)){c.fillStyle=mute;c.fillText('Add a design to compare',w/2,h/2);$('boardLeg').innerHTML='';return}
+  const top=niceCeil(mx*1.0001);c.strokeStyle=grid;c.lineWidth=1;
+  for(let k=1;k<=4;k++){c.beginPath();c.arc(cx,cy,R*k/4,0,2*Math.PI);c.stroke()}
+  for(let a=0;a<360;a+=30){const t=a*RAD;c.beginPath();c.moveTo(cx,cy);c.lineTo(cx+R*Math.sin(t),cy+R*Math.cos(t));c.stroke();c.fillStyle=mute;c.fillText((a<=180?a:360-a)+'°',cx+(R+14)*Math.sin(t),cy+(R+14)*Math.cos(t))}
+  c.textAlign='left';c.fillStyle=mute;for(let k=1;k<=4;k++)c.fillText(kfmt(top*k/4),cx+R*k/4*Math.sin(150*RAD)+3,cy+R*k/4*Math.cos(150*RAD));
+  pr.forEach((arr,j)=>{c.beginPath();arr.forEach((v,i)=>{const t=(i-180)*RAD,r=v/top*R,x=cx+r*Math.sin(t),y=cy+r*Math.cos(t);i?c.lineTo(x,y):c.moveTo(x,y)});c.closePath();c.setLineDash(items[j].dash);c.strokeStyle=items[j].col;c.lineWidth=2;c.stroke();c.setLineDash([])});
+  $('boardLeg').innerHTML=items.map(it=>`<span><i style="display:inline-block;width:14px;height:3px;background:${it.col};vertical-align:middle;margin-right:5px"></i>${esc2(it.label)}</span>`).join('');
+}
+const esc2=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function renderBoard(){
+  const t=$('boardTab');
+  if(!BOARD.length){t.innerHTML='<tr><td>No designs on the board yet. Use “Add current design to board” after each variation.</td></tr>';return}
+  let L=0,W=0;
+  t.innerHTML='<tr><th></th><th>Design</th><th>lm</th><th>W</th><th>lm/W</th><th>Peak cd</th><th>Beam</th><th>Down</th><th>LOR</th><th>Qty</th><th></th></tr>'+BOARD.map((b,i)=>{const m=b.m;L+=m.flux*b.qty;W+=m.watts*b.qty;
+    return`<tr><td><i style="display:inline-block;width:12px;height:12px;background:${BCOL[i%BCOL.length]}"></i></td><td><input type="text" data-bi="${i}" data-bf="label" value="${esc2(b.label)}" style="min-width:150px"></td><td>${nstr(m.flux,0)}</td><td>${nstr(m.watts,1)}</td><td>${m.watts>0?nstr(m.flux/m.watts,0):'–'}</td><td>${kfmt(m.peak)}</td><td>${bw(m.b50)}</td><td>${nstr(m.down*100,0)} %</td><td>${m.lor==null?'–':nstr(m.lor*100,0)+' %'}</td><td><input type="number" min="1" max="999" value="${b.qty}" data-bi="${i}" data-bf="qty" style="width:56px"></td><td><button class="btn" data-bact="open" data-bi="${i}">Open</button> <button class="btn" data-bact="del" data-bi="${i}">Remove</button></td></tr>`}).join('')
+    +`<tr><td></td><td><b>Schedule total</b></td><td><b>${nstr(L,0)}</b></td><td><b>${nstr(W,0)}</b></td><td></td><td colspan="6"></td></tr>`;
+}
+function boardRestore(snap){
+  const c=structuredClone(snap);Object.keys(c).forEach(k=>{S[k]=c[k]});
+  $('decCustom').value=S.dec.custom||'';$('srcList').value=S.dec.srcList||'';
+  if(S.dec.pat){const t=$('patThumb');t.style.display='block'}
+  schedule();
+}
+$('bAdd').addEventListener('click',()=>{const b=boardSnap();if(!b){toast('Nothing to add yet.');return}BOARD.push(b);$('boardCard').open=true;renderBoard();drawBoard();toast('Added to the board.')});
+$('boardTab').addEventListener('input',e=>{const el=e.target,i=el.dataset.bi;if(i==null)return;const b=BOARD[+i];if(!b)return;if(el.dataset.bf==='qty'){b.qty=Math.max(1,Math.round(+el.value)||1)}else{b.label=el.value;$('boardLeg').innerHTML=''}});
+$('boardTab').addEventListener('change',()=>{renderBoard();drawBoard()});
+$('boardTab').addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.dataset.bact==null)return;const i=+b.dataset.bi;
+  if(b.dataset.bact==='del'){BOARD.splice(i,1);renderBoard();drawBoard()}
+  else if(BOARD[i]){boardRestore(BOARD[i].snap);toast('Opened '+BOARD[i].label)}});
+['lumCard','boardCard'].forEach(id=>$(id).addEventListener('toggle',()=>{if(id==='boardCard'){renderBoard();drawBoard()}else drawLum()}));
+/* project file */
+function b64(u8){let s='';for(let i=0;i<u8.length;i+=8192)s+=String.fromCharCode.apply(null,u8.subarray(i,i+8192));return btoa(s)}
+function projSave(){
+  const data={app:'Candela Bench',version:'2.0',saved:new Date().toISOString(),S,board:BOARD};
+  return JSON.stringify(data,(k,v)=>ArrayBuffer.isView(v)?{__t:v.constructor.name,a:b64(new Uint8Array(v.buffer,v.byteOffset,v.byteLength))}:v);
+}
+function projLoad(text){
+  const T={Float32Array,Float64Array,Uint8Array,Int32Array};
+  const d=JSON.parse(text,(k,v)=>{if(v&&v.__t&&T[v.__t]){const bin=atob(v.a),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new T[v.__t](u.buffer)}return v});
+  if(!d||d.app!=='Candela Bench'||!d.S)throw new Error('not a project');
+  Object.keys(d.S).forEach(k=>{S[k]=d.S[k]});BOARD=d.board||[];
+  $('decCustom').value=S.dec.custom||'';$('srcList').value=S.dec.srcList||'';$('patThumb').style.display=S.dec.pat?'block':'none';
+  renderBoard();schedule();
+}
+$('bProjSave').addEventListener('click',()=>{try{save(fname()+'_project.json',projSave())}catch(e){toast('Could not build the project file.')}});
+$('bProjOpen').addEventListener('click',()=>$('projFile').click());
+$('projFile').addEventListener('change',async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;try{projLoad(await f.text());toast('Opened project '+f.name)}catch(err){toast('That is not a Candela Bench project file.')}e.target.value=''});
+
 (async()=>{try{dl=await (window.claude&&window.claude.use?window.claude.use('downloads'):null)}catch(e){dl=null}
-  if(!dl){$('bZip').hidden=true;$('bTxt').hidden=true;$('bPdf').hidden=true;$('bXls').hidden=true;$('d3Save').hidden=true}})();
+  if(!dl){$('bZip').hidden=true;$('bTxt').hidden=true;$('bProjSave').hidden=true;$('bPdf').hidden=true;$('bXls').hidden=true;$('d3Save').hidden=true}})();
 
 
 /* ---------------- spec sheet reader ---------------- */
