@@ -1,0 +1,1520 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+</head>
+<body>
+<title>Candela Bench</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: fixed control rail on the left, live photometry sheet on the right; stacks on phones. */
+:root{
+  --bg:#E8EBED; --panel:#F6F7F8; --ink:#14181C; --mute:#5A6570; --line:#C8CFD5; --field:#FFFFFF;
+  --accent:#B9500A; --accent-ink:#FFFFFF; --curve-a:#B9500A; --curve-b:#1B6A87;
+  --ok:#1C7A4B; --warn:#936000; --err:#B3261E; --plot-bg:#FFFFFF; --grid:#D5DADF;
+  --f-disp:'Barlow Condensed','Arial Narrow',sans-serif; --f-body:'Barlow',system-ui,sans-serif; --f-mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#101316; --panel:#171B1F; --ink:#E6EAED; --mute:#8D98A2; --line:#2A3138; --field:#0E1114;
+    --accent:#F2A33A; --accent-ink:#1A1206; --curve-a:#F2A33A; --curve-b:#5FC4E6;
+    --ok:#5BD08F; --warn:#E8B04A; --err:#FF7A70; --plot-bg:#0C0F12; --grid:#232A31; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#101316; --panel:#171B1F; --ink:#E6EAED; --mute:#8D98A2; --line:#2A3138; --field:#0E1114;
+  --accent:#F2A33A; --accent-ink:#1A1206; --curve-a:#F2A33A; --curve-b:#5FC4E6;
+  --ok:#5BD08F; --warn:#E8B04A; --err:#FF7A70; --plot-bg:#0C0F12; --grid:#232A31; color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 var(--f-body);margin:0;
+  padding-block:16px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1480px;margin:0 auto}
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:8px 24px;padding-bottom:14px;border-bottom:2px solid var(--ink);margin-bottom:16px}
+h1{font:600 34px/1 var(--f-disp);letter-spacing:.02em;text-transform:uppercase;margin:0}
+h1 small{font:500 12px var(--f-mono);letter-spacing:.04em;color:var(--mute);margin-left:10px;text-transform:none}
+.sub{color:var(--mute);max-width:60ch;margin:6px 0 0}
+.badge{font:500 11px var(--f-mono);border:1px solid var(--line);padding:4px 8px;color:var(--mute);background:var(--panel)}
+.app{display:grid;grid-template-columns:minmax(300px,390px) minmax(0,1fr);gap:16px;align-items:start}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+@media(min-width:960px){.side{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto;padding-right:4px}}
+@media(max-width:959px){.app{grid-template-columns:minmax(0,1fr)}}
+.main{display:flex;flex-direction:column;gap:12px;min-width:0}
+.card{background:var(--panel);border:1px solid var(--line);padding:12px 14px;min-width:0}
+.card h2{font:600 15px var(--f-disp);letter-spacing:.08em;text-transform:uppercase;margin:0 0 10px;color:var(--ink);display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.card h2 span{font:400 11px var(--f-mono);letter-spacing:0;text-transform:none;color:var(--mute)}
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--ink)}
+.tabs button{font:600 14px var(--f-disp);letter-spacing:.06em;text-transform:uppercase;background:var(--panel);color:var(--ink);border:0;border-right:1px solid var(--line);padding:9px 4px;cursor:pointer}
+.tabs button:last-child{border-right:0}
+.tabs button[aria-selected=true]{background:var(--ink);color:var(--bg)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.fld{margin:0 0 10px}
+.fl{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.fl label{font-size:13px;color:var(--ink)}
+.num{display:inline-flex;align-items:center;gap:4px;font:400 12px var(--f-mono);color:var(--mute)}
+input[type=number],select,input[type=text],textarea{background:var(--field);color:var(--ink);border:1px solid var(--line);font:400 13px var(--f-mono);padding:5px 6px;min-width:0}
+input[type=number]{width:74px;text-align:right}
+select{width:100%;font-family:var(--f-body);font-size:13px}
+input[type=text]{width:100%;font-family:var(--f-body)}
+textarea{width:100%;min-height:96px;resize:vertical}
+input[type=range]{width:100%;accent-color:var(--accent);margin:4px 0 0}
+.chk{display:flex;align-items:center;gap:8px;font-size:13px}
+.chk input{accent-color:var(--accent);width:16px;height:16px}
+.pre{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.pre button,.btn{font:500 12px var(--f-body);background:var(--field);color:var(--ink);border:1px solid var(--line);padding:5px 9px;cursor:pointer}
+.pre button:hover,.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.grp{font:600 11px var(--f-disp);letter-spacing:.1em;text-transform:uppercase;color:var(--mute);margin:14px 0 8px;padding-top:10px;border-top:1px solid var(--line)}
+.grp:first-child{margin-top:0;border-top:0;padding-top:0}
+.note{font-size:12px;color:var(--mute);margin:6px 0 0}
+.derived{font:400 12px/1.6 var(--f-mono);background:var(--field);border:1px solid var(--line);padding:8px 10px;margin-top:8px;color:var(--ink)}
+.derived b{font-weight:500;color:var(--accent)}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
+.m{background:var(--panel);padding:10px 12px;min-width:0}
+.m i{display:block;font:normal 600 11px var(--f-disp);letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.m b{display:block;font:500 20px/1.2 var(--f-mono);font-variant-numeric:tabular-nums;margin-top:2px;overflow-wrap:anywhere}
+.m em{font:normal 400 11px var(--f-mono);color:var(--mute)}
+.plots{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:12px}
+@media(max-width:1180px){.plots{grid-template-columns:minmax(0,1fr)}}
+canvas{display:block;width:100%;background:var(--plot-bg);border:1px solid var(--line)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font:400 12px var(--f-mono);color:var(--mute);margin-top:8px}
+.sw{display:inline-block;width:18px;height:0;border-top:3px solid;vertical-align:middle;margin-right:5px}
+.sw.b{border-top-style:dashed}
+.ctl{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin-bottom:8px}
+.ctl .fld{margin:0;flex:1 1 140px}
+.seg{display:inline-flex;border:1px solid var(--line)}
+.seg button{font:500 12px var(--f-body);padding:5px 10px;background:var(--field);color:var(--ink);border:0;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.chips{display:flex;flex-wrap:wrap;gap:4px 10px;font:400 11px var(--f-mono);margin-top:8px}
+.chips span{display:inline-flex;align-items:center;gap:4px}
+.chips i{display:inline-block;width:12px;height:12px;border:1px solid var(--line)}
+table{border-collapse:collapse;font:400 12px var(--f-mono);font-variant-numeric:tabular-nums;width:100%}
+th,td{border-bottom:1px solid var(--line);padding:4px 8px;text-align:right;white-space:nowrap}
+th{font:600 11px var(--f-disp);letter-spacing:.08em;text-transform:uppercase;color:var(--mute);text-align:right}
+th:first-child,td:first-child{text-align:left}
+.scroll{overflow:auto;max-width:100%}
+.step{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--ink);color:var(--bg);font:600 13px var(--f-mono);margin-right:8px;letter-spacing:0}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px}
+.tile{text-align:left;background:var(--field);color:var(--ink);border:1px solid var(--line);padding:10px;cursor:pointer;font-family:var(--f-body)}
+.tile b{display:block;font:600 15px var(--f-disp);letter-spacing:.04em;text-transform:uppercase}
+.tile span{display:block;font-size:12px;color:var(--mute);margin-top:2px}
+.tile:hover{border-color:var(--accent)}
+.tile[aria-pressed=true]{border:2px solid var(--accent);padding:9px}
+.hint{font:400 11px var(--f-mono);letter-spacing:0;text-transform:none;color:var(--mute);margin-left:8px}
+.sumtext{margin:0 0 10px;font-size:15px;max-width:70ch}
+.advrow{margin-top:6px;padding-top:10px;border-top:1px solid var(--line)}
+.dbody{margin-top:12px}
+.h3{font:600 13px var(--f-disp);letter-spacing:.08em;text-transform:uppercase;margin:0 0 6px}
+.seg button[aria-selected=true]{background:var(--ink);color:var(--bg)}
+.rgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:0 16px;margin-bottom:6px}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+details>summary{cursor:pointer;font:600 15px var(--f-disp);letter-spacing:.08em;text-transform:uppercase}
+.cdt{max-height:380px}
+.cdt th{position:sticky;top:0;background:var(--panel)}
+.cdt td:first-child,.cdt th:first-child{position:sticky;left:0;background:var(--panel)}
+.val{list-style:none;margin:0 0 10px;padding:0;font-size:12.5px;display:flex;flex-direction:column;gap:3px}
+.val li{display:flex;gap:8px}
+.val li::before{font:600 12px var(--f-mono);width:14px;flex:none}
+.val .ok::before{content:"✓";color:var(--ok)} .val .wn::before{content:"!";color:var(--warn)} .val .er::before{content:"✕";color:var(--err)} .val .in::before{content:"·";color:var(--mute)}
+pre#ies{margin:0;background:var(--field);border:1px solid var(--line);padding:10px;font:400 12px/1.5 var(--f-mono);max-height:300px;overflow:auto;color:var(--ink);white-space:pre}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;align-items:center}
+.toast{font:400 12px var(--f-mono);color:var(--mute)}
+svg.lamp{width:100%;max-height:260px;background:var(--plot-bg);border:1px solid var(--line);margin-top:8px}
+svg.lamp text{font:400 10px var(--f-mono);fill:var(--mute)}
+.hov{font:400 12px var(--f-mono);color:var(--mute);min-height:18px;margin-top:6px}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <div>
+    <h1>Candela Bench <small>v1.0</small></h1>
+    <p class="sub">Pick a fixture, adjust a few settings, check the light, and save an IES file.</p>
+  </div>
+  <span class="badge">Computed photometry · not LM-79 lab data</span>
+</header>
+
+<div class="app">
+  <aside class="side">
+    <div class="card" id="startCard"><h2><b class="step">1</b> Start from</h2><div class="tiles" id="tiles"></div></div>
+    <details class="card" id="specCard">
+      <summary>Read a spec sheet <span class="hint">paste text or a screenshot</span></summary>
+      <p class="note" style="margin-top:8px">Paste the text of a fixture reference page, or attach a screenshot of it. The brief is read into a model you can then adjust.</p>
+      <div class="fld"><div class="fl"><label for="specText">Spec text</label></div><textarea id="specText" spellcheck="false" placeholder="D1 Pendant - Bespoke&#10;Wattage: 25W&#10;Dimensions: 300mm dia x 565mm H&#10;Color temperature: 3000K&#10;System lumen output: min. 1250lm"></textarea></div>
+      <div class="fld"><div class="fl"><label for="specImg">or screenshot</label></div><input type="file" id="specImg" accept="image/*"></div>
+      <div class="pre"><button class="btn primary" id="specGo">Read spec</button><button class="btn" id="specEx">Load example</button></div>
+      <p class="note" id="specMsg"></p>
+      <ul class="val" id="specList"></ul>
+      <div class="grp" id="specChkH" hidden>Spec check</div>
+      <ul class="val" id="specChk"></ul>
+    </details>
+
+    <div class="card" id="adjCard">
+      <h2><b class="step">2</b> Adjust</h2>
+      <div class="seg" id="tabs" hidden style="margin-bottom:12px"><button data-tab="dist" aria-selected="true">Set the beam angle</button><button data-tab="opt" aria-selected="false">Build from LED optics</button></div>
+      <div id="panel"></div>
+      <label class="chk advrow"><input type="checkbox" id="advToggle"> Show all controls</label>
+    </div>
+    <div class="card"><h2>Light output <span id="dimsNote"></span></h2><div id="outPanel"></div></div>
+  </aside>
+
+  <section class="main">
+    <div class="card sum">
+      <h2><b class="step">3</b> Check and save</h2>
+      <p class="sumtext" id="sumText"></p>
+      <div class="actions">
+        <button class="btn primary" id="bZip">Save .ies (zip)</button>
+        <button class="btn" id="bTxt">Save as .txt</button>
+        <button class="btn" id="bCopy">Copy text</button>
+        <span class="toast" id="toast"></span>
+      </div>
+      <ul class="val" id="val"></ul>
+    </div>
+    <div class="metrics" id="metrics"></div>
+    <div class="plots">
+      <div class="card">
+        <h2>Polar curve <span id="polarNote"></span></h2>
+        <div class="ctl"><div class="fld" id="planeFld"></div></div>
+        <canvas id="polar" aria-label="Polar luminous intensity curves"></canvas>
+        <div class="legend"><span><i class="sw" style="color:var(--curve-a)"></i><b id="legA">C0–C180</b></span><span><i class="sw b" style="color:var(--curve-b)"></i><b id="legB">C90–C270</b></span><span id="polarMax"></span></div>
+      </div>
+    <div class="card">
+      <h2>3D view <span id="d3Note"></span></h2>
+      <div class="ctl">
+        <div class="seg" id="layerSeg"><button data-layer="fix" aria-pressed="false">Fixture</button><button data-layer="sol" aria-pressed="false">Light solid</button><button data-layer="both" aria-pressed="true">Both</button></div>
+        <button class="btn" id="d3Out" aria-label="Zoom out">−</button><button class="btn" id="d3In" aria-label="Zoom in">+</button><button class="btn" id="d3Reset">Reset view</button>
+        <button class="btn" id="d3Save">Save .obj (zip)</button>
+      </div>
+      <canvas id="d3" style="touch-action:none;cursor:grab" aria-label="3D fixture and light solid, drag to orbit"></canvas>
+      <div class="legend"><span>Drag to orbit, scroll or +/− to zoom.</span><span id="d3Leg">Light solid radius is proportional to intensity, dashed ring = peak.</span></div>
+    </div>
+    </div>
+    <details class="card more" id="roomCard"><summary>Test it in a room <span class="hint">lux, uniformity, W/m²</span></summary>
+      <div class="dbody"><p class="note" id="roomNote">direct light + average interreflection</p>
+      <div class="rgrid" id="roomFields"></div>
+      <div class="ctl"><div class="seg" id="roomShow"><button data-show="wp" aria-pressed="true">Work plane</button><button data-show="all" aria-pressed="false">All surfaces</button></div><button class="btn" id="rReset">Reset view</button></div>
+      <div class="metrics" id="roomMetrics"></div>
+      <div class="plots" style="margin-top:12px">
+        <div><canvas id="room3d" style="touch-action:none;cursor:grab" aria-label="3D room with false colour illuminance, drag to orbit"></canvas><div class="legend"><span>3D room, drag to orbit and scroll to zoom.</span></div></div>
+        <div><canvas id="roomPlan" aria-label="Plan view of the work plane with lux values"></canvas><div class="hov" id="roomHov">Hover the plan to read lux.</div></div>
+      </div>
+      <div class="legend" style="align-items:center"><span id="rLegMin">0 lx</span><i id="rLeg" style="flex:1 1 160px;height:10px;display:block;border:1px solid var(--line)"></i><span id="rLegMax">0 lx</span></div>
+      <div class="scroll" style="margin-top:10px"><table id="roomTab"></table></div>
+      </div>
+    </details>
+    <details class="card more" id="moreDet"><summary>More analysis <span class="hint">illuminance map, throw, glare, candela table</span></summary>
+      <div class="dbody">
+      <div class="card">
+        <h2>Illuminance <span id="isoNote"></span></h2>
+        <div class="ctl">
+          <div class="seg" id="planeSeg"><button data-plane="floor" aria-pressed="true">Floor</button><button data-plane="wall" aria-pressed="false">Wall</button></div>
+          <div class="fld" id="mhFld"></div>
+          <div class="fld" id="wxFld"></div>
+        </div>
+        <canvas id="iso" aria-label="Illuminance map"></canvas>
+        <div class="hov" id="hov">Hover or drag over the map to read lux.</div>
+        <div class="chips" id="isoLeg"></div>
+      </div>
+
+      <div class="two" style="margin-top:12px">
+        <div><h3 class="h3">Throw along peak axis</h3><div class="scroll"><table id="axial"></table></div></div>
+        <div><h3 class="h3">Glare angles <span id="glareNote"></span></h3><div class="scroll"><table id="glare"></table></div></div>
+      </div>
+      <details id="cdDet" style="margin-top:12px"><summary>Candela table</summary><div class="scroll cdt" id="cdTable"></div></details>
+      </div>
+    </details>
+    <details class="card more"><summary>IES file text <span class="hint" id="iesMeta"></span></summary>
+      <div class="dbody"><pre id="ies" tabindex="0"></pre></div>
+    </details>
+  </section>
+</div>
+</div>
+
+<script>
+'use strict';
+const RAD=Math.PI/180, LN2=Math.LN2;
+const $=id=>document.getElementById(id);
+const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
+const r4=x=>Math.round(x*1e4)/1e4;
+const getPath=(o,p)=>p.split('.').reduce((a,k)=>a[k],o);
+const setPath=(o,p,v)=>{const a=p.split('.');const l=a.pop();a.reduce((x,k)=>x[k],o)[l]=v};
+function niceCeil(x){if(!(x>0))return 1;const e=Math.pow(10,Math.floor(Math.log10(x)));const m=x/e;return(m<=1?1:m<=2?2:m<=2.5?2.5:m<=5?5:10)*e}
+function nstr(x,d){if(!isFinite(x))return '–';return (+x.toFixed(d)).toString()}
+function kfmt(x){if(!isFinite(x))return '–';const a=Math.abs(x);return a>=1e4?(x/1e3).toFixed(1)+'k':a>=100?x.toFixed(0):a>=10?x.toFixed(1):x.toFixed(2)}
+
+/* ---------------- state ---------------- */
+const S={
+  adv:false,start:null,tab:'dist',name:'Downlight',manu:'',cat:'',lumens:3000,watts:30,eff:100,cct:4000,cri:90,
+  shape:'circle',dimW:100,dimL:100,dimH:0,basis:'abs',vstep:'auto',hstep:'auto',rescale:false,
+  dist:{profile:'gauss',beamA:40,beamB:40,lock:true,dip:35,tilt:0,azim:0,cutoff:90,up:0},
+  opt:{type:'reflector',D:15,A:70,H:50,recess:10,trim:70,q:1.25,spill:5},
+  dec:{mode:'linear',preset:'barrel',H:280,dt:150,db:150,bulge:30,mat:'opal',T:55,topOpen:false,botOpen:false,
+       src:'line',srcLen:80,srcPos:50,perf:0,ribs:0,duty:35,dlShare:0,dlBeam:100,custom:'0, 60\n40, 85\n120, 95\n220, 80\n260, 45'},
+  imp:{text:'',data:null,res:null,fname:''},
+  mh:3,plane:'floor',wx:1.0,planeAng:0,spec:null,
+  room:{L:6,W:4,H:2.8,wp:.75,margin:.5,rod:.6,nx:2,ny:2,rot:0,rc:70,rw:50,rf:20,mf:.8,req:300,show:'wp'}
+};
+const MATS={opal:['Opal glass / acrylic',55],frosted:['Frosted glass',72],fabric:['Fabric',35],paper:['Paper / rice paper',45],smoked:['Smoked glass',30],clear:['Clear acrylic',90],perf:['Perforated metal',3],opaque:['Opaque metal',0]};
+
+/* ---------------- field schema ---------------- */
+const F={
+ dist:[
+  {k:'dist.profile',t:'sel',l:'Distribution',o:[['gauss','Gaussian'],['cos','Cosine power'],['bat','Batwing']]},
+  {k:'dist.lock',t:'chk',l:'Symmetric beam'},
+  {k:'dist.beamA',t:'rng',l:'Beam angle (50 % of peak)',min:4,max:170,step:1,u:'°'},
+  {k:'dist.beamB',t:'rng',l:'Beam angle across',min:4,max:170,step:1,u:'°',show:s=>!s.dist.lock},
+  {k:'dist.dip',t:'rng',l:'Centre dip',min:0,max:80,step:1,u:'%',show:s=>s.dist.profile==='bat'},
+  {g:'Aim and shielding'},
+  {k:'dist.tilt',t:'rng',l:'Aim tilt from nadir',min:0,max:75,step:1,u:'°'},
+  {k:'dist.azim',t:'rng',l:'Aim / ellipse azimuth (C)',min:0,max:355,step:5,u:'°'},
+  {k:'dist.cutoff',t:'rng',l:'Cut-off angle from nadir',min:30,max:90,step:1,u:'°'},
+  {k:'dist.up',t:'rng',l:'Uplight share',min:0,max:100,step:1,u:'%'}
+ ],
+ opt:[
+  {k:'opt.type',t:'sel',l:'Optic',o:[['reflector','Parabolic reflector'],['tir','TIR collimator lens'],['bare','Bare LED in recess']]},
+  {k:'opt.D',t:'rng',l:'LED emitter Ø (LES)',min:2,max:40,step:.5,u:'mm'},
+  {k:'opt.A',t:'rng',l:'Optic exit Ø',min:20,max:200,step:1,u:'mm',show:s=>s.opt.type!=='bare'},
+  {k:'opt.H',t:'rng',l:'Optic depth / height',min:5,max:150,step:1,u:'mm'},
+  {k:'opt.recess',t:'rng',l:'Recess behind trim',min:0,max:80,step:1,u:'mm',show:s=>s.opt.type!=='reflector'},
+  {k:'opt.trim',t:'rng',l:'Trim opening Ø',min:10,max:200,step:1,u:'mm'},
+  {g:'Optical quality'},
+  {k:'opt.q',t:'rng',l:'Étendue factor (1 = ideal)',min:1,max:2.5,step:.05,u:'×',show:s=>s.opt.type!=='bare'},
+  {k:'opt.spill',t:'rng',l:'Stray light / spill',min:0,max:30,step:1,u:'%',show:s=>s.opt.type!=='bare'}
+ ],
+ dec:[
+  {k:'dec.H',t:'rng',l:'Height',min:30,max:1200,step:5,u:'mm'},
+  {k:'dec.dt',t:'rng',l:'Top Ø',min:0,max:800,step:5,u:'mm'},
+  {k:'dec.db',t:'rng',l:'Bottom Ø',min:0,max:800,step:5,u:'mm'},
+  {k:'dec.bulge',t:'rng',l:'Belly (+) / waist (−), radial',min:-150,max:150,step:1,u:'mm',show:s=>s.dec.mode==='linear'},
+  {g:'Shade material'},
+  {k:'dec.mat',t:'sel',l:'Material',o:Object.entries(MATS).map(([k,v])=>[k,v[0]]).concat([['custom','Custom']])},
+  {k:'dec.T',t:'rng',l:'Diffuse transmittance',min:0,max:95,step:1,u:'%'},
+  {k:'dec.topOpen',t:'chk',l:'Top open'},
+  {k:'dec.botOpen',t:'chk',l:'Bottom open'},
+  {g:'Light source inside'},
+  {k:'dec.src',t:'sel',l:'Source',o:[['line','Vertical LED filament / tube'],['ball','Point / small ball LED']]},
+  {k:'dec.srcLen',t:'rng',l:'Filament length',min:0,max:600,step:5,u:'mm',show:s=>s.dec.src==='line'},
+  {k:'dec.srcPos',t:'rng',l:'Position along height',min:0,max:100,step:1,u:'%'},
+  {g:'Pattern'},
+  {k:'dec.perf',t:'rng',l:'Perforation (open area)',min:0,max:60,step:1,u:'%'},
+  {k:'dec.ribs',t:'rng',l:'Ribs / slats around',min:0,max:36,step:1,u:''},
+  {k:'dec.duty',t:'rng',l:'Rib width (share of pitch)',min:5,max:90,step:1,u:'%',show:s=>s.dec.ribs>0},
+  {g:'Downlight module in the bottom'},
+  {k:'dec.dlShare',t:'rng',l:'Share of output',min:0,max:100,step:1,u:'%'},
+  {k:'dec.dlBeam',t:'rng',l:'Downlight beam angle',min:15,max:150,step:1,u:'°',show:s=>s.dec.dlShare>0}
+ ],
+ room:[
+  {k:'room.L',t:'num',l:'Room length',min:1,max:100,step:.1,u:'m'},
+  {k:'room.W',t:'num',l:'Room width',min:1,max:100,step:.1,u:'m'},
+  {k:'room.H',t:'num',l:'Room height',min:1.8,max:20,step:.1,u:'m'},
+  {k:'room.wp',t:'num',l:'Work plane height',min:0,max:3,step:.05,u:'m'},
+  {k:'room.margin',t:'num',l:'Work plane margin',min:0,max:3,step:.05,u:'m'},
+  {k:'room.rod',t:'num',l:'Suspension length',min:0,max:5,step:.05,u:'m',show:s=>s.tab==='dec'},
+  {k:'room.nx',t:'num',l:'Luminaires along length',min:1,max:12,step:1,u:''},
+  {k:'room.ny',t:'num',l:'Luminaires along width',min:1,max:12,step:1,u:''},
+  {k:'room.rot',t:'num',l:'Luminaire rotation',min:0,max:345,step:15,u:'°'},
+  {k:'room.rc',t:'num',l:'Ceiling reflectance',min:0,max:95,step:5,u:'%'},
+  {k:'room.rw',t:'num',l:'Wall reflectance',min:0,max:95,step:5,u:'%'},
+  {k:'room.rf',t:'num',l:'Floor reflectance',min:0,max:95,step:5,u:'%'},
+  {k:'room.mf',t:'num',l:'Maintenance factor',min:.3,max:1,step:.05,u:''},
+  {k:'room.req',t:'num',l:'Required Em',min:0,max:5000,step:25,u:'lx'}
+ ],
+ out:[
+  {k:'name',t:'txt',l:'Luminaire name'},
+  {k:'manu',t:'txt',l:'Manufacturer / studio'},
+  {k:'cat',t:'txt',l:'Catalogue number'},
+  {k:'lumens',t:'num',l:'Luminaire output',min:1,max:200000,step:10,u:'lm',show:s=>s.tab!=='imp'||s.rescale},
+  {k:'watts',t:'num',l:'Input power',min:0,max:5000,step:1,u:'W'},
+  {k:'eff',t:'num',l:'Efficacy',min:1,max:300,step:1,u:'lm/W'},
+  {k:'cct',t:'num',l:'CCT',min:1800,max:10000,step:100,u:'K'},
+  {k:'cri',t:'num',l:'CRI (Ra)',min:0,max:100,step:1,u:''},
+  {k:'shape',t:'sel',l:'Luminous opening shape',show:s=>s.tab==='dist',o:[['circle','Circle'],['rect','Rectangle'],['cyl','Vertical cylinder'],['sphere','Sphere'],['point','Point']]},
+  {k:'dimW',t:'num',l:'Width / Ø',min:0,max:5000,step:5,u:'mm',show:s=>s.tab==='dist'&&s.shape!=='point'},
+  {k:'dimL',t:'num',l:'Length',min:0,max:5000,step:5,u:'mm',show:s=>s.tab==='dist'&&s.shape==='rect'},
+  {k:'dimH',t:'num',l:'Height',min:0,max:5000,step:5,u:'mm',show:s=>s.tab==='dist'&&(s.shape==='rect'||s.shape==='cyl')},
+  {k:'basis',t:'sel',l:'Candela basis',o:[['abs','Absolute (lumens = −1)'],['lamp','Rated lumens, multiplier 1'],['norm','Normalised per 1000 lm']]},
+  {k:'vstep',t:'sel',l:'Vertical step',o:[['auto','Auto'],['5','5°'],['2.5','2.5°'],['1','1°']]},
+  {k:'hstep',t:'sel',l:'Horizontal step',o:[['auto','Auto'],['30','30°'],['22.5','22.5°'],['15','15°'],['10','10°'],['7.5','7.5°'],['5','5°']]}
+ ]
+};
+function mkField(f,idp){
+  const w=document.createElement('div');
+  if(f.g){w.className='grp';w.textContent=f.g;w._f={adv:f.adv,show:f.show};return w}
+  w.className='fld';w._f=f;
+  const id='f_'+f.k.replace(/\W/g,'_');
+  if(f.t==='chk'){w.innerHTML=`<label class="chk"><input type="checkbox" id="${id}" data-k="${f.k}"> ${f.l}</label>`}
+  else if(f.t==='sel'){w.innerHTML=`<div class="fl"><label for="${id}">${f.l}</label></div><select id="${id}" data-k="${f.k}">${f.o.map(o=>`<option value="${o[0]}">${o[1]}</option>`).join('')}</select>`}
+  else if(f.t==='txt'){w.innerHTML=`<div class="fl"><label for="${id}">${f.l}</label></div><input type="text" id="${id}" data-k="${f.k}" maxlength="60">`}
+  else if(f.t==='num'){w.innerHTML=`<div class="fl"><label for="${id}">${f.l}</label><span class="num"><input type="number" id="${id}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}">${f.u}</span></div>`}
+  else {w.innerHTML=`<div class="fl"><label for="${id}n">${f.l}</label><span class="num"><input type="number" id="${id}n" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}">${f.u}</span></div><input type="range" id="${id}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" aria-label="${f.l}">`}
+  return w;
+}
+function fill(container,fields){fields.forEach(f=>container.appendChild(mkField(f)))}
+function pushInputs(root){
+  root.querySelectorAll('[data-k]').forEach(el=>{
+    const v=getPath(S,el.dataset.k);
+    if(el.type==='checkbox')el.checked=!!v; else if(document.activeElement!==el)el.value=v;
+  });
+  root.querySelectorAll('.fld,.grp').forEach(w=>{if(w._f)w.hidden=(w._f.adv&&!S.adv)||(w._f.show?!w._f.show(S):false)});
+}
+
+const ADVK=new Set(['dist.profile','dist.lock','dist.beamB','dist.dip','dist.tilt','dist.azim','dist.cutoff','dist.up','opt.recess','opt.trim','opt.q','opt.spill','dec.bulge','dec.T','dec.topOpen','dec.botOpen','dec.src','dec.srcLen','dec.srcPos','dec.perf','dec.ribs','dec.duty','dec.dlShare','dec.dlBeam','manu','cat','eff','cri','shape','dimW','dimL','dimH','basis','vstep','hstep']);
+const ADVG=new Set(['Aim and shielding','Optical quality','Light source inside','Pattern','Downlight module in the bottom']);
+['dist','opt','dec','out'].forEach(k=>F[k].forEach(f=>{if(f.k&&ADVK.has(f.k))f.adv=true;if(f.g&&ADVG.has(f.g))f.adv=true}));
+/* ---------------- panels ---------------- */
+const PRESETS={
+ dist:[['Spot downlight',{profile:'gauss',beamA:24,beamB:24,lock:true,tilt:0,azim:0,cutoff:90,up:0}],
+       ['Flood',{profile:'gauss',beamA:70,beamB:70,lock:true,tilt:0,azim:0,cutoff:90,up:0}],
+       ['Office batwing',{profile:'bat',beamA:110,beamB:110,lock:true,dip:30,tilt:0,azim:0,cutoff:80,up:0}],
+       ['Wall washer',{profile:'gauss',beamA:90,beamB:55,lock:false,tilt:35,azim:90,cutoff:85,up:0}],
+       ['Linear / strip',{profile:'cos',beamA:120,beamB:50,lock:false,tilt:0,azim:0,cutoff:90,up:0}],
+       ['Pendant up + down',{profile:'cos',beamA:100,beamB:100,lock:true,tilt:0,azim:0,cutoff:90,up:35}]],
+ dec:[['Globe','globe'],['Dome','dome'],['Drum','drum'],['Bell','bell'],['Barrel','barrel'],['Hourglass','hour']]
+};
+const DEC={
+ globe:{mode:'globe',H:200,dt:200,db:200,bulge:0,topOpen:false,botOpen:false,mat:'opal',T:55},
+ dome:{mode:'dome',H:150,dt:300,db:300,bulge:0,topOpen:false,botOpen:true,mat:'opal',T:55},
+ drum:{mode:'linear',H:220,dt:240,db:240,bulge:0,topOpen:true,botOpen:true,mat:'fabric',T:35},
+ bell:{mode:'linear',H:240,dt:90,db:320,bulge:0,topOpen:true,botOpen:true,mat:'frosted',T:72},
+ barrel:{mode:'linear',H:280,dt:150,db:150,bulge:30,topOpen:false,botOpen:false,mat:'opal',T:55},
+ hour:{mode:'linear',H:300,dt:200,db:200,bulge:-45,topOpen:true,botOpen:true,mat:'frosted',T:72}
+};
+const panel=$('panel');
+let panels={};
+function buildPanels(){
+  const mk=(tab,head,presetRow,fields,extra)=>{
+    const d=document.createElement('div');d.dataset.p=tab;
+    if(head){const p=document.createElement('p');p.className='note';p.style.marginTop='0';p.textContent=head;d.appendChild(p)}
+    if(presetRow)d.appendChild(presetRow);
+    fill(d,fields);
+    if(extra)d.appendChild(extra);
+    panel.appendChild(d);panels[tab]=d;
+  };
+  const row=(list,act)=>{const r=document.createElement('div');r.className='pre';list.forEach(([l,v],i)=>{const b=document.createElement('button');b.textContent=l;b.dataset.act=act;b.dataset.v=i;r.appendChild(b)});return r};
+  mk('dist','Pick a beam angle and the output below. Use presets for common fixtures.',row(PRESETS.dist,'dpre'),F.dist,Object.assign(document.createElement('div'),{className:'derived',id:'dDer'}));
+  mk('opt','Estimate the beam from the LED and optic size. It can not be narrower than physics allows.',null,F.opt,Object.assign(document.createElement('div'),{className:'derived',id:'oDer'}));
+  const decx=document.createElement('div');
+  decx.innerHTML='<div class="fld" id="customWrap" hidden><div class="fl"><label for="decCustom">Shade profile, z (up) and radius, mm</label></div><textarea id="decCustom" spellcheck="false"></textarea></div><div class="pre"><button id="toPts">Edit shape as points</button></div><svg class="lamp" id="lampSvg" viewBox="0 0 260 250" role="img" aria-label="Shade section"></svg><div class="derived" id="cDer"></div>';
+  mk('dec','A light source inside a shade. Choose a shape, then size and material.',row(PRESETS.dec,'cpre'),F.dec,decx);
+  const imp=document.createElement('div');
+  imp.innerHTML='<p class="note" style="margin-top:0">Open an existing .ies file or paste its text. It is parsed, checked against LM-63 and plotted. Type C photometry is supported.</p><div class="fld"><div class="fl"><label for="impFile">IES file</label></div><input type="file" id="impFile" accept=".ies,.IES,.txt,text/plain"></div><div class="fld"><div class="fl"><label for="impText">or paste text</label></div><textarea id="impText" spellcheck="false" placeholder="IESNA:LM-63-2002&#10;[TEST] …&#10;TILT=NONE&#10;…"></textarea></div><div class="pre"><button class="btn" id="impLoad">Load pasted text</button></div><label class="chk"><input type="checkbox" id="impScale"> Rescale to the output lumens</label><p class="note" id="impMsg"></p>';
+  panel.appendChild(imp);panels.imp=imp;imp.dataset.p='imp';
+  fill($('outPanel'),F.out);fill($('roomFields'),F.room);
+  fill($('planeFld'),[{k:'planeAng',t:'rng',l:'Plane A (plane B = +90°)',min:0,max:175,step:5,u:'°'}]);
+  fill($('mhFld'),[{k:'mh',t:'rng',l:'Mounting height',min:.5,max:12,step:.1,u:'m'}]);
+  fill($('wxFld'),[{k:'wx',t:'rng',l:'Wall offset',min:.1,max:5,step:.1,u:'m',show:s=>s.plane==='wall'}]);
+}
+
+buildPanels();
+
+/* ---------------- photometry primitives ---------------- */
+function makeAxes(vs,hs){
+  const v=[],h=[];
+  for(let i=0;i*vs<=180+1e-9;i++)v.push(r4(i*vs));
+  for(let i=0;i*hs<360-1e-9;i++)h.push(r4(i*hs));
+  return{v,h,vs,hs};
+}
+function cellOmega(ax){return ax.v.map(g=>{const a=Math.max(0,g-ax.vs/2)*RAD,b=Math.min(180,g+ax.vs/2)*RAD;return(Math.cos(a)-Math.cos(b))*ax.hs*RAD})}
+const evalGrid=(ax,fn)=>ax.h.map(c=>ax.v.map(g=>fn(g,c)));
+function fluxGrid(grid,om){let s=0;for(const r of grid)for(let i=0;i<r.length;i++)s+=r[i]*om[i];return s}
+function normGrid(grid,om){const f=fluxGrid(grid,om);return f>0?grid.map(r=>r.map(x=>x/f)):grid.map(r=>r.map(()=>0))}
+function mixGrids(parts){ // [[w,grid]]
+  const a=parts[0][1];return a.map((r,i)=>r.map((_,j)=>{let s=0;for(const[w,g]of parts)s+=w*g[i][j];return s}))
+}
+function reduceSym(ax,cd){
+  const nh=ax.h.length,nv=ax.v.length;let peak=0;for(const r of cd)for(const x of r)peak=Math.max(peak,x);
+  const tol=(S.tab==='dec'?3e-3:1e-6)*peak+1e-9;
+  const eq=(a,b)=>{for(let i=0;i<nv;i++)if(Math.abs(a[i]-b[i])>tol)return false;return true};
+  let h,rows;
+  if(cd.every(r=>eq(r,cd[0]))){h=[0];rows=[cd[0]]}
+  else{
+    const mir=i=>(nh-i)%nh;
+    let bil=true;for(let i=0;i<nh&&bil;i++)if(!eq(cd[i],cd[mir(i)]))bil=false;
+    let quad=false;
+    if(bil){quad=true;const n180=Math.round(180/ax.hs);for(let i=0;i<=n180&&quad;i++)if(!eq(cd[i],cd[(n180-i)%nh]))quad=false}
+    if(quad){const n=Math.round(90/ax.hs);h=ax.h.slice(0,n+1);rows=cd.slice(0,n+1)}
+    else if(bil){const n=Math.round(180/ax.hs);h=ax.h.slice(0,n+1);rows=cd.slice(0,n+1)}
+    else{h=ax.h.concat([360]);rows=cd.concat([cd[0]])}
+  }
+  let v=ax.v,i90=ax.v.indexOf(90),upEmpty=true;
+  if(i90>=0){for(const r of rows)for(let i=i90+1;i<nv;i++)if(r[i]>tol)upEmpty=false}else upEmpty=false;
+  if(upEmpty){v=ax.v.slice(0,i90+1);rows=rows.map(r=>r.slice(0,i90+1))}
+  return{v,h,cd:rows};
+}
+function bsearch(a,x){let lo=0,hi=a.length-1;while(hi-lo>1){const m=(lo+hi)>>1;if(a[m]<=x)lo=m;else hi=m}return lo}
+function cdAt(P,g,C){
+  const v=P.v,h=P.h;let c=((C%360)+360)%360;
+  if(h.length===1)c=0;else{const L=h[h.length-1];if(L<=90.01){if(c>180)c=360-c;if(c>90)c=180-c}else if(L<=180.01){if(c>180)c=360-c}}
+  if(g<v[0]-1e-9||g>v[v.length-1]+1e-9)return 0;
+  const i=Math.min(bsearch(v,g),v.length-2);const tv=(g-v[i])/(v[i+1]-v[i]);
+  const row=j=>P.cd[j][i]*(1-tv)+P.cd[j][i+1]*tv;
+  if(h.length===1)return row(0);
+  const j=Math.min(bsearch(h,Math.min(c,h[h.length-1])),h.length-2);const th=clamp((c-h[j])/(h[j+1]-h[j]),0,1);
+  return row(j)*(1-th)+row(j+1)*th;
+}
+function planeProfile(P,C){const a=new Array(361);for(let t=-180;t<=180;t++)a[t+180]=t>=0?cdAt(P,t,C):cdAt(P,-t,C+180);return a}
+function widthAt(a,frac){
+  let k=0;for(let i=1;i<a.length;i++)if(a[i]>a[k])k=i;
+  if(!(a[k]>0))return 0;const thr=frac*a[k];let i=k;while(i>0&&a[i-1]>=thr)i--;let j=k;while(j<a.length-1&&a[j+1]>=thr)j++;
+  const l=i>0?(i-1)+(thr-a[i-1])/(a[i]-a[i-1]):0, r=j<a.length-1?j+(a[j]-thr)/(a[j]-a[j+1]):a.length-1;
+  return Math.max(0,r-l);
+}
+function analyse(P){
+  let flux=0,up=0;
+  for(let g=0;g<=180;g++){
+    const a=Math.max(0,g-.5)*RAD,b=Math.min(180,g+.5)*RAD,om=(Math.cos(a)-Math.cos(b))*5*RAD;
+    for(let c=0;c<360;c+=5){const I=cdAt(P,g,c);flux+=I*om;if(g>90)up+=I*om}
+  }
+  let peak=0,pg=0,pc=0;
+  for(let j=0;j<P.h.length;j++)for(let i=0;i<P.v.length;i++)if(P.cd[j][i]>peak){peak=P.cd[j][i];pg=P.v[i];pc=P.h[j]}
+  const A=planeProfile(P,0),B=planeProfile(P,90);
+  return{flux,up,down:flux-up,peak,pg,pc,b50A:widthAt(A,.5),b50B:widthAt(B,.5),b10A:widthAt(A,.1),b10B:widthAt(B,.1)};
+}
+function maxAtGamma(P,g){let m=0;for(let c=0;c<360;c+=5)m=Math.max(m,cdAt(P,g,c));return m}
+
+/* ---------------- model: profile ---------------- */
+function calibR50(base){
+  let mx=0,rp=0;for(let r=0;r<=4;r+=.01){const v=base(r);if(v>mx){mx=v;rp=r}}
+  for(let r=rp;r<=6;r+=.005)if(base(r)<=.5*mx)return r;return 1;
+}
+function genDist(ax){
+  const D=S.dist,ta=D.beamA/2*RAD,tb=(D.lock?D.beamA:D.beamB)/2*RAD,tilt=D.tilt*RAD,az=D.azim*RAD,om=cellOmega(ax);
+  const a=[Math.sin(tilt)*Math.cos(az),Math.sin(tilt)*Math.sin(az),-Math.cos(tilt)];
+  const u=[Math.cos(tilt)*Math.cos(az),Math.cos(tilt)*Math.sin(az),Math.sin(tilt)];
+  const w=[-Math.sin(az),Math.cos(az),0];
+  const n=Math.log(.5)/Math.log(Math.cos(ta));
+  let base;
+  if(D.profile==='gauss')base=r=>Math.exp(-LN2*r*r);
+  else if(D.profile==='cos')base=r=>{const e=r*ta;return e>=Math.PI/2?0:Math.pow(Math.cos(e),n)};
+  else{const dip=D.dip/100;const raw=r=>Math.exp(-LN2*Math.pow(r/1.35,4))*(1-dip*Math.exp(-Math.pow(r/.55,2)));const s=calibR50(raw);base=r=>raw(r*s)}
+  const co=D.cutoff;
+  const fD=(g,C)=>{
+    const sg=Math.sin(g*RAD),cg=Math.cos(g*RAD),cc=C*RAD,dx=sg*Math.cos(cc),dy=sg*Math.sin(cc),dz=-cg;
+    const da=dx*a[0]+dy*a[1]+dz*a[2];if(da<=0)return 0;
+    const du=dx*u[0]+dy*u[1]+dz*u[2],dv=dx*w[0]+dy*w[1]+dz*w[2];
+    const r=Math.hypot(Math.atan2(du,da)/ta,Math.atan2(dv,da)/tb);
+    let val=base(r);
+    if(g>=co)val=0;else if(g>co-3)val*=(co-g)/3;
+    return val;
+  };
+  const up=D.up/100,parts=[];
+  if(up<1)parts.push([1-up,normGrid(evalGrid(ax,fD),om)]);
+  if(up>0)parts.push([up,normGrid(evalGrid(ax,(g)=>g>90?-Math.cos(g*RAD):0),om)]);
+  return{rel:mixGrids(parts),info:{}};
+}
+/* ---------------- model: optics ---------------- */
+function overlapArea(r1,r2,d){
+  if(d>=r1+r2)return 0;if(d<=Math.abs(r1-r2))return Math.PI*Math.min(r1,r2)**2;
+  const a=r1*r1*Math.acos(clamp((d*d+r1*r1-r2*r2)/(2*d*r1),-1,1)),b=r2*r2*Math.acos(clamp((d*d+r2*r2-r1*r1)/(2*d*r2),-1,1));
+  const c=.5*Math.sqrt(Math.max(0,(-d+r1+r2)*(d+r1-r2)*(d-r1+r2)*(d+r1+r2)));return a+b-c;
+}
+function optGeom(){
+  const O=S.opt,D=O.D/1000,A=O.A/1000,H=O.H/1000,T=O.trim/1000,rec=O.recess/1000;let f=0,thGeo=0,thEt=0,half=0;
+  if(O.type==='bare'){half=60*RAD}
+  else{
+    thEt=Math.asin(Math.min(.999,D/A))*O.q;
+    f=O.type==='reflector'?A*A/(16*H):H*.85;thGeo=Math.atan(D/(2*f));
+    half=clamp(Math.max(thEt,thGeo),3*RAD,85*RAD);
+  }
+  let dd,dep,exitD,depAp;
+  if(O.type==='reflector'){dd=D;dep=H;exitD=A;depAp=0}
+  else if(O.type==='tir'){dd=A;dep=rec;exitD=A;depAp=rec}
+  else{dd=D;dep=rec;exitD=D;depAp=rec}
+  const vis=(g,dia,depth)=>{if(g>=90)return 0;const rd=dia/2,ro=T/2;return overlapArea(rd,ro,depth*Math.tan(g*RAD))/(Math.PI*rd*rd)};
+  return{D,A,H,T,rec,f,thEt,thGeo,half,vis:g=>vis(g,dd,dep),visAp:g=>vis(g,exitD,depAp),exitD,dd,dep};
+}
+function genOpt(ax){
+  const O=S.opt,G=optGeom(),om=cellOmega(ax);
+  const cosG=normGrid(evalGrid(ax,g=>g<90?Math.cos(g*RAD):0),om);
+  let base;
+  if(O.type==='bare')base=cosG;
+  else{
+    const gG=normGrid(evalGrid(ax,g=>g<90?Math.exp(-LN2*Math.pow(g*RAD/G.half,2)):0),om);
+    base=mixGrids([[1-O.spill/100,gG],[O.spill/100,cosG]]);
+  }
+  const vis=ax.v.map(g=>G.vis(g));
+  return{rel:base.map(r=>r.map((x,i)=>x*vis[i])),info:G};
+}
+/* ---------------- model: decorative lamp ---------------- */
+function profilePts(P){
+  const N=36,pts=[],H=P.H/1000,rt=P.dt/2000,rb=P.db/2000,bu=P.bulge/1000,Rm=Math.max(rt,rb);
+  if(P.mode==='custom'){
+    const out=[];P.custom.split(/\n/).forEach(l=>{const m=l.split(/[,;\s]+/).filter(Boolean).map(Number);if(m.length>=2&&isFinite(m[0])&&isFinite(m[1]))out.push({z:m[0]/1000,r:Math.max(0,m[1])/1000})});
+    out.sort((a,b)=>a.z-b.z);
+    if(out.length>=2&&out[out.length-1].z-out[0].z>1e-4)return{pts:out,ok:true};
+    return{pts:profilePts(Object.assign({},P,{mode:'linear',H:220,dt:240,db:240,bulge:0})).pts,ok:false};
+  }
+  for(let k=0;k<=N;k++){
+    const s=(1-Math.cos(Math.PI*k/N))/2;let r;
+    if(P.mode==='globe')r=Rm*Math.sqrt(Math.max(0,1-Math.pow(2*s-1,2)));
+    else if(P.mode==='dome')r=Rm*Math.sqrt(Math.max(0,1-s*s));
+    else r=Math.max(0,rb+(rt-rb)*s+bu*Math.sin(Math.PI*s));
+    pts.push({z:H*s,r});
+  }
+  return{pts,ok:true};
+}
+function genDec(ax){
+  const P=S.dec,{pts,ok}=profilePts(P),om=cellOmega(ax);
+  const zb=pts[0].z,zt=pts[pts.length-1].z,rB=pts[0].r,rT=pts[pts.length-1].r;
+  const openT=P.topOpen&&rT>.002,openB=P.botOpen&&rB>.002;
+  const rmax=Math.max(...pts.map(p=>p.r));
+  const nS=P.src==='line'&&P.srcLen>0?7:1,zs=[],zc=zb+(zt-zb)*P.srcPos/100,len=P.srcLen/1000;
+  for(let k=0;k<nS;k++)zs.push(zc+(nS>1?(k/(nS-1)-.5)*len:0));
+  const T0=P.T/100,pf=P.perf/100,M=96;
+  const Tphi=phi=>{
+    let t=T0;
+    if(P.ribs>0){const f=((phi/(2*Math.PI))*P.ribs+.5)%1;if(Math.abs(f-.5)<P.duty/200)t=.02}
+    return t*(1-pf)+pf*.85;
+  };
+  const W=[],NX=[],NY=[],NZ=[];
+  const add=(px,py,pz,nx,ny,nz,A,Tv)=>{
+    if(Tv<=0||A<=0)return;let E=0;
+    for(const zz of zs){const dx=-px,dy=-py,dz=zz-pz,r2=dx*dx+dy*dy+dz*dz+1e-12,r=Math.sqrt(r2),ci=-(nx*dx+ny*dy+nz*dz)/r;if(ci>0)E+=ci/r2}
+    E/=zs.length*4*Math.PI;const w=Tv*E*A/Math.PI;if(w>0){W.push(w);NX.push(nx);NY.push(ny);NZ.push(nz)}
+  };
+  for(let i=0;i<pts.length-1;i++){
+    const a=pts[i],b=pts[i+1],dz=b.z-a.z,dr=b.r-a.r,l=Math.hypot(dz,dr);if(l<1e-9)continue;
+    const nr=dz/l,nz=-dr/l,rm=(a.r+b.r)/2,zm=(a.z+b.z)/2,A=l*rm*2*Math.PI/M;if(rm<=0)continue;
+    for(let j=0;j<M;j++){const ph=(j+.5)/M*2*Math.PI;add(rm*Math.cos(ph),rm*Math.sin(ph),zm,nr*Math.cos(ph),nr*Math.sin(ph),nz,A,Tphi(ph))}
+  }
+  const cap=(r,z,nz,isOpen)=>{
+    if(isOpen||r<.002)return;const K=8,M2=48;
+    for(let k=0;k<K;k++){const r0=r*k/K,r1=r*(k+1)/K,rm=(r0+r1)/2,A=Math.PI*(r1*r1-r0*r0)/M2;
+      for(let j=0;j<M2;j++){const ph=(j+.5)/M2*2*Math.PI;add(rm*Math.cos(ph),rm*Math.sin(ph),z,0,0,nz,A,Tphi(ph))}}
+  };
+  cap(rT,zt,1,openT);cap(rB,zb,-1,openB);
+  const nP=W.length,Wf=Float64Array.from(W),Nx=Float64Array.from(NX),Ny=Float64Array.from(NY),Nz=Float64Array.from(NZ);
+  const KZ=160,rz=new Float64Array(KZ+1);
+  for(let k=0;k<=KZ;k++){const z=zb+(zt-zb)*k/KZ;const i=Math.min(bsearch(pts.map(p=>p.z),z),pts.length-2);const t=(z-pts[i].z)/((pts[i+1].z-pts[i].z)||1);rz[k]=pts[i].r+(pts[i+1].r-pts[i].r)*clamp(t,0,1)}
+  const rAt=z=>{const f=(z-zb)/(zt-zb)*KZ;const k=clamp(Math.floor(f),0,KZ-1);const t=f-k;return rz[k]*(1-t)+rz[k+1]*t};
+  const pass=(g,sg,dx,dy,dz)=>{
+    let cnt=0;if(Math.abs(dz)<1e-9)return 0;
+    const top=dz>0;if(!(top?openT:openB))return 0;
+    for(const z0 of zs){
+      const tex=((top?zt:zb)-z0)/dz;if(tex<=0)continue;
+      if(sg*tex>=(top?rT:rB))continue;
+      let bl=false;for(let s=1;s<48;s++){const t=tex*s/48;if(sg*t>=rAt(z0+dz*t)){bl=true;break}}
+      if(!bl)cnt++;
+    }
+    return cnt/zs.length;
+  };
+  const colFn=C=>ax.v.map(g=>{
+    const sg=Math.sin(g*RAD),cg=Math.cos(g*RAD),cc=C*RAD,dx=sg*Math.cos(cc),dy=sg*Math.sin(cc),dz=-cg;
+    let I=pass(g,sg,dx,dy,dz)/(4*Math.PI);
+    for(let p=0;p<nP;p++){const d=Nx[p]*dx+Ny[p]*dy+Nz[p]*dz;if(d>0)I+=Wf[p]*d}
+    return I;
+  });
+  let rel;
+  if(P.ribs===0){const c0=colFn(0);rel=ax.h.map(()=>c0)}
+  else rel=ax.h.map(c=>colFn(c));
+  if(P.dlShare>0){
+    const hb=P.dlBeam/2*RAD,sh=normGrid(rel,om),dn=normGrid(evalGrid(ax,g=>g<90?Math.exp(-LN2*Math.pow(g*RAD/hb,2)):0),om);
+    rel=mixGrids([[1-P.dlShare/100,sh],[P.dlShare/100,dn]]);
+  }
+  return{rel,info:{ok,pts,rmax,zb,zt,openT,openB,nP,zs}};
+}
+
+/* ---------------- luminous opening dims and area ---------------- */
+function dimsM(info){
+  if(S.tab==='opt'){return{shape:'circle',w:S.opt.trim/1000,l:0,h:0}}
+  if(S.tab==='dec'){const I=info;const d=2*I.rmax,h=I.zt-I.zb;return S.dec.mode==='globe'?{shape:'sphere',w:d,l:0,h:d}:{shape:'cyl',w:d,l:0,h}}
+  if(S.tab==='imp'&&S.imp.data){return S.imp.data.dims}
+  return{shape:S.shape,w:S.dimW/1000,l:S.dimL/1000,h:S.dimH/1000};
+}
+function lumArea(dm,g,info){
+  const c=Math.cos(g*RAD),s=Math.sin(g*RAD);
+  if(S.tab==='opt'&&info&&info.visAp){const G=info;const full=Math.PI*Math.pow(G.exitD/2,2);return full*G.visAp(g)*c}
+  if(dm.shape==='rect')return dm.w*dm.l*Math.max(0,c)+(dm.h>0?(dm.w+dm.l)*dm.h*s*.5:0);
+  if(dm.shape==='circle')return Math.PI*Math.pow(dm.w/2,2)*Math.max(0,c);
+  if(dm.shape==='cyl')return Math.PI*Math.pow(dm.w/2,2)*Math.abs(c)+dm.w*dm.h*s;
+  if(dm.shape==='sphere')return Math.PI*Math.pow(dm.w/2,2);
+  return 0;
+}
+
+/* ---------------- IES writer ---------------- */
+function numStr(x){const a=Math.abs(x);let s=a>=1000?x.toFixed(1):a>=100?x.toFixed(2):x.toFixed(3);return s.replace(/\.?0+$/,'')||'0'}
+function angStr(x){return(+x.toFixed(3)).toString()}
+function kw(L,k,v){
+  v=String(v||'').replace(/[\r\n]+/g,' ').trim();if(!v)v='-';
+  const ch=[];for(let i=0;i<v.length;i+=62)ch.push(v.slice(i,i+62));
+  L.push(`[${k}] ${ch[0]}`);for(let i=1;i<ch.length;i++)L.push(`[MORE] ${ch[i]}`);
+}
+function wrapNums(arr,fn,per=10){const out=[];for(let i=0;i<arr.length;i+=per)out.push(arr.slice(i,i+per).map(fn).join(' '));return out}
+function writeIES(P,M){
+  const L=['IESNA:LM-63-2002'],d=new Date();
+  const mon=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][d.getMonth()];
+  kw(L,'TEST','CB-'+Math.round(M.lumens)+'LM-'+(P.h.length)+'x'+(P.v.length));
+  kw(L,'TESTLAB','Candela Bench, computed model (not LM-79 measured)');
+  kw(L,'ISSUEDATE',String(d.getDate()).padStart(2,'0')+'-'+mon+'-'+d.getFullYear());
+  kw(L,'MANUFAC',M.manu||'Unspecified');kw(L,'LUMCAT',M.cat||'-');kw(L,'LUMINAIRE',M.name||'Luminaire');
+  kw(L,'LAMPCAT','LED');kw(L,'LAMP',`LED ${M.cct}K CRI ${M.cri}`);kw(L,'OTHER',`CCT ${M.cct}K, CRI Ra ${M.cri}, ${nstr(M.watts,1)} W`);
+  kw(L,'MORE',M.note||'Mathematically generated photometry for concept and feasibility work.');
+  L.push('TILT=NONE');
+  let lf=-1,mult=1,scale=1;
+  if(M.basis==='lamp'){lf=M.lumens}else if(M.basis==='norm'){lf=1000;mult=M.lumens/1000;scale=1000/M.lumens}
+  const dm=M.dims;let w=0,l=0,h=0;
+  if(dm.shape==='rect'){w=dm.w;l=dm.l;h=dm.h}else if(dm.shape==='circle'){w=-dm.w;l=-dm.w;h=0}
+  else if(dm.shape==='cyl'){w=-dm.w;l=-dm.w;h=dm.h}else if(dm.shape==='sphere'){w=-dm.w;l=-dm.w;h=-dm.w}
+  const f4=x=>(+x.toFixed(4)).toString();
+  L.push(`1 ${lf===-1?'-1':numStr(lf)} ${(+mult.toFixed(6))} ${P.v.length} ${P.h.length} 1 2 ${f4(w)} ${f4(l)} ${f4(h)}`);
+  L.push(`1 1 ${nstr(M.watts,2)}`);
+  wrapNums(P.v,angStr).forEach(x=>L.push(x));wrapNums(P.h,angStr).forEach(x=>L.push(x));
+  for(const row of P.cd)wrapNums(row,x=>numStr(x*scale)).forEach(x=>L.push(x));
+  return L.join('\r\n')+'\r\n';
+}
+/* ---------------- IES parser / validator ---------------- */
+function parseIES(text){
+  const res={errors:[],warnings:[],info:[],data:null};
+  const E=m=>res.errors.push(m),W=m=>res.warnings.push(m),I=m=>res.info.push(m);
+  const lines=text.replace(/^﻿/,'').split(/\r\n|\r|\n/);
+  let i=0,ver='LM-63-1991';
+  if(/^IESNA/i.test((lines[0]||'').trim())){const m=lines[0].trim().toUpperCase();ver=m.includes('2019')?'LM-63-2019':m.includes('2002')?'LM-63-2002':m.includes('1995')?'LM-63-1995':'LM-63-1991';i=1}
+  else W('No IESNA header line, read as LM-63-1991.');
+  const keys={};let long=0;
+  for(;i<lines.length;i++){
+    const t=lines[i].trim();if(lines[i].length>132)long++;
+    if(/^TILT\s*=/i.test(t))break;
+    const m=t.match(/^\[([^\]]+)\]\s*(.*)$/);if(m)keys[m[1].toUpperCase()]=(keys[m[1].toUpperCase()]?keys[m[1].toUpperCase()]+' ':'')+m[2];
+  }
+  if(i>=lines.length){E('No TILT= line found.');return res}
+  if(ver==='LM-63-2002'||ver==='LM-63-2019'){if(!keys.TEST)W('[TEST] keyword missing (required by LM-63-2002).');if(!keys.MANUFAC)W('[MANUFAC] keyword missing (required by LM-63-2002).')}
+  const tilt=lines[i].trim().split('=')[1].trim().toUpperCase();i++;
+  const tok=lines.slice(i).join(' ').split(/[\s,]+/).filter(Boolean);
+  let p=0;const bad=[];
+  const nums=tok.map(x=>{const n=Number(x);if(!isFinite(n))bad.push(x);return n});
+  if(bad.length){E(`Non-numeric value in data block: "${bad[0]}".`);return res}
+  const nx=()=>nums[p++];
+  if(tilt==='INCLUDE'){nx();const n=nx();p+=2*n}else if(tilt!=='NONE')W(`TILT=${tilt} refers to an external file, tilt data ignored.`);
+  if(nums.length-p<13){E('Data block too short: the 13 header values are missing.');return res}
+  const nl=nx(),lumens=nx(),mult=nx(),nv=nx(),nh=nx(),type=nx(),units=nx(),w=nx(),l=nx(),h=nx(),ball=nx();nx();const watts=nx();
+  if(!(Number.isInteger(nv)&&nv>=1&&Number.isInteger(nh)&&nh>=1)){E('Number of vertical or horizontal angles is not a positive integer.');return res}
+  if(![1,2,3].includes(type))E('Photometric type must be 1 (C), 2 (B) or 3 (A).');
+  if(![1,2].includes(units))E('Units type must be 1 (feet) or 2 (metres).');
+  if(!(nl>=1))W('Number of lamps is below 1.');
+  if(!(lumens===-1||lumens>0))E('Lumens per lamp must be positive or −1 for absolute photometry.');
+  if(!(mult>0))E('Candela multiplier must be above 0.');
+  const need=nv+nh+nv*nh;
+  if(nums.length-p<need){E(`Expected ${need} angle and candela values, found ${nums.length-p}.`);return res}
+  if(nums.length-p>need)W(`${nums.length-p-need} extra value(s) after the candela table.`);
+  const v=nums.slice(p,p+nv);p+=nv;const hh=nums.slice(p,p+nh);p+=nh;
+  const cd=[];for(let j=0;j<nh;j++){cd.push(nums.slice(p,p+nv).map(x=>x*mult));p+=nv}
+  const asc=a=>a.every((x,k)=>k===0||x>a[k-1]);
+  if(!asc(v))E('Vertical angles are not in ascending order.');
+  if(!asc(hh))E('Horizontal angles are not in ascending order.');
+  if(type===1){
+    if(!(v[0]===0||v[0]===90))W(`Vertical angles start at ${v[0]}°, expected 0° or 90° for type C.`);
+    if(!(v[nv-1]===90||v[nv-1]===180))W(`Vertical angles end at ${v[nv-1]}°, expected 90° or 180° for type C.`);
+    if(nh===1){if(hh[0]!==0)W('A single horizontal angle should be 0°.')}
+    else{if(hh[0]!==0)W('First horizontal angle should be 0°.');if(![90,180,360].includes(hh[nh-1]))W(`Last horizontal angle is ${hh[nh-1]}°, expected 90°, 180° or 360°.`)}
+  }
+  if(cd.some(r=>r.some(x=>x<0)))E('Negative candela value found.');
+  if(long)W(`${long} line(s) exceed 132 characters.`);
+  if(!(watts>0))W('Input watts is 0 or missing.');
+  if(ball!==1&&ball>0)I(`Ballast factor ${ball}.`);
+  let dims;{const f=units===1?.3048:1;const aw=Math.abs(w)*f,al=Math.abs(l)*f,ah=Math.abs(h)*f;
+    if(w===0&&l===0&&h===0)dims={shape:'point',w:0,l:0,h:0};
+    else if(w<0&&h<0)dims={shape:'sphere',w:aw,l:0,h:aw};
+    else if(w<0)dims={shape:ah>0?'cyl':'circle',w:aw,l:0,h:ah};
+    else dims={shape:'rect',w:aw,l:al,h:ah}}
+  const data={v,h:hh,cd,type,units,dims,n:nl,lumens,mult,watts:watts||0,ver,keys};
+  res.data=data;
+  I(`${ver}, type ${type===1?'C':type===2?'B':'A'}, ${nv} × ${nh} angles, ${units===1?'feet':'metres'}.`);
+  if(type!==1){W('Only type C photometry can be plotted here.');res.plotable=false}else{
+    res.plotable=true;
+    const a=analyse(data);res.stats=a;
+    I(`Integrated luminaire flux ${nstr(a.flux,0)} lm, peak ${nstr(a.peak,0)} cd.`);
+    if(lumens>0){const lor=a.flux/(lumens*nl*(ball>0?ball:1));I(`Declared lamp lumens ${nstr(lumens*nl,0)} lm, output ratio ${nstr(lor*100,0)} %.`);if(lor>1.05)W('Integrated flux exceeds declared lamp lumens by more than 5 %.')}
+    if(a.flux<=0)E('Candela table integrates to zero lumens.');
+  }
+  return res;
+}
+
+/* ---------------- compute pipeline ---------------- */
+let cur={P:null,info:null,A:null,dm:null,text:'',parse:null};
+function autoSteps(){
+  let vs=S.vstep==='auto'?null:+S.vstep,hs=S.hstep==='auto'?null:+S.hstep;
+  if(vs===null){
+    let b=40;if(S.tab==='dist')b=Math.min(S.dist.beamA,S.dist.lock?S.dist.beamA:S.dist.beamB);
+    else if(S.tab==='opt'){const G=optGeom();b=S.opt.type==='bare'?120:2*G.half/RAD}
+    else b=100;
+    vs=b<12?1:b<30?2.5:5;
+  }
+  if(hs===null)hs=(S.tab==='dec'&&S.dec.ribs>0)?5:15;
+  return{vs,hs};
+}
+function compute(){
+  const M={name:S.name,manu:S.manu,cat:S.cat,lumens:S.lumens,watts:S.watts,cct:S.cct,cri:S.cri,basis:S.basis,note:''};
+  let P,info=null;
+  if(S.tab==='imp'){
+    const d=S.imp.data;if(!d||!S.imp.res||!S.imp.res.plotable)return null;
+    P={v:d.v,h:d.h,cd:d.cd};
+    const a=analyse(P);let k=1;if(S.rescale&&a.flux>0)k=S.lumens/a.flux;
+    if(k!==1)P={v:d.v,h:d.h,cd:d.cd.map(r=>r.map(x=>x*k))};
+    M.lumens=a.flux*k;M.note='Converted from an imported IES file.';
+    M.name=S.name;
+  }else{
+    const{vs,hs}=autoSteps(),ax=makeAxes(vs,hs),om=cellOmega(ax);
+    let g;
+    if(S.tab==='dist')g=genDist(ax);else if(S.tab==='opt')g=genOpt(ax);else g=genDec(ax);
+    info=g.info;
+    const nrm=normGrid(g.rel,om),cd=nrm.map(r=>r.map(x=>x*S.lumens));
+    P=reduceSym(ax,cd);
+    M.note=S.tab==='dist'?`Profile model ${S.dist.profile}, beam ${S.dist.beamA}/${S.dist.lock?S.dist.beamA:S.dist.beamB} deg.`:S.tab==='opt'?`Optical estimate: ${S.opt.type}, LED ${S.opt.D} mm, exit ${S.opt.A} mm.`:`Decorative lamp model: ${S.dec.preset||'custom'} shade, ${S.dec.mat}.`;
+  }
+  const dm=dimsM(info);M.dims=dm;
+  const text=writeIES(P,M);
+  return{P,info,dm,M,text};
+}
+
+/* ---------------- rendering ---------------- */
+function css(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim()}
+function setupCanvas(cv,w,h){const dpr=Math.min(2,window.devicePixelRatio||1);cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);cv.style.height=h+'px';const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);return c}
+
+function drawPolar(){
+  const cv=$('polar'),P=cur.P;if(!P)return;
+  const w=Math.max(240,cv.parentElement.clientWidth-28),h=Math.min(w,520),c=setupCanvas(cv,w,h);
+  const cx=w/2,cy=h/2,R=Math.min(w,h)/2-30,ink=css('--ink'),mute=css('--mute'),grid=css('--grid');
+  const pa=S.planeAng,A=planeProfile(P,pa),B=planeProfile(P,pa+90);
+  let mx=0;for(const x of A)mx=Math.max(mx,x);for(const x of B)mx=Math.max(mx,x);
+  const top=niceCeil(mx*1.0001),rings=4;
+  c.clearRect(0,0,w,h);c.font='11px '+css('--f-mono');c.textAlign='center';c.textBaseline='middle';
+  c.strokeStyle=grid;c.lineWidth=1;
+  for(let k=1;k<=rings;k++){c.beginPath();c.arc(cx,cy,R*k/rings,0,2*Math.PI);c.stroke()}
+  for(let a=0;a<360;a+=30){const t=a*RAD;c.beginPath();c.moveTo(cx,cy);c.lineTo(cx+R*Math.sin(t),cy+R*Math.cos(t));c.stroke();
+    const lab=a<=180?a:360-a;c.fillStyle=mute;c.fillText(lab+'°',cx+(R+16)*Math.sin(t),cy+(R+16)*Math.cos(t))}
+  c.textAlign='left';c.fillStyle=mute;
+  for(let k=1;k<=rings;k++){const t=150*RAD,r=R*k/rings;c.fillText(kfmt(top*k/rings),cx+r*Math.sin(t)+3,cy+r*Math.cos(t))}
+  const path=(arr,col,dash,fillA)=>{
+    c.beginPath();for(let i=0;i<arr.length;i++){const t=(i-180)*RAD,r=arr[i]/top*R,x=cx+r*Math.sin(t),y=cy+r*Math.cos(t);i?c.lineTo(x,y):c.moveTo(x,y)}
+    c.closePath();if(fillA){c.globalAlpha=fillA;c.fillStyle=col;c.fill();c.globalAlpha=1}
+    c.setLineDash(dash);c.strokeStyle=col;c.lineWidth=2;c.stroke();c.setLineDash([]);
+  };
+  path(A,css('--curve-a'),[],.14);path(B,css('--curve-b'),[6,4],0);
+  c.fillStyle=ink;c.textAlign='left';c.fillText('cd',6,12);
+  $('legA').textContent=`C${pa}–C${pa+180}`;$('legB').textContent=`C${(pa+90)%360}–C${(pa+270)%360}`;
+  $('polarMax').textContent=`outer ring ${kfmt(top)} cd`;
+}
+const RAMP=[[0,'#000004'],[.13,'#1b0c41'],[.25,'#4a0c6b'],[.38,'#781c6d'],[.5,'#a52c60'],[.63,'#cf4446'],[.75,'#ed6925'],[.88,'#fb9a06'],[.94,'#f7d03c'],[1,'#fcffa4']].map(([t,h])=>[t,parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
+function ramp(t){t=clamp(t,0,1);for(let i=1;i<RAMP.length;i++)if(t<=RAMP[i][0]){const a=RAMP[i-1],b=RAMP[i],u=(t-a[0])/(b[0]-a[0]);return[a[1]+(b[1]-a[1])*u,a[2]+(b[2]-a[2])*u,a[3]+(b[3]-a[3])*u]}return[252,255,164]}
+
+function fieldImage(g,gw,gh,OW,OH,Emax,levels){
+  const off=document.createElement('canvas');off.width=OW;off.height=OH;const oc=off.getContext('2d'),img=oc.createImageData(OW,OH);
+  const band=e=>{let b=0;for(const L of levels)if(e>=L)b++;return b};
+  const val=new Float32Array(OW*OH),bd=new Uint8Array(OW*OH);
+  for(let j=0;j<OH;j++){const fy=(j+.5)/OH*gh-.5,j0=clamp(Math.floor(fy),0,gh-1),j1=Math.min(gh-1,j0+1),ty=clamp(fy-j0,0,1);
+    for(let i=0;i<OW;i++){const fx=(i+.5)/OW*gw-.5,i0=clamp(Math.floor(fx),0,gw-1),i1=Math.min(gw-1,i0+1),tx=clamp(fx-i0,0,1);
+      const a=g[j0][i0],b=g[j0][i1],c=g[j1][i0],d=g[j1][i1];let v;
+      if(a<0||b<0||c<0||d<0)v=tx<.5?(ty<.5?a:c):(ty<.5?b:d);else v=(a*(1-tx)+b*tx)*(1-ty)+(c*(1-tx)+d*tx)*ty;
+      val[j*OW+i]=v;bd[j*OW+i]=v<0?0:band(v)}}
+  for(let j=0;j<OH;j++)for(let i=0;i<OW;i++){const k=j*OW+i,o=k*4,v=val[k];if(v<0){img.data[o+3]=0;continue}
+    const t=Emax>0?Math.pow(v/Emax,.55):0;let[r,gg,b]=ramp(t);
+    const edge=(i+1<OW&&val[k+1]>=0&&bd[k+1]!==bd[k])||(j+1<OH&&val[k+OW]>=0&&bd[k+OW]!==bd[k]);
+    if(edge){const q=t>.5?0:255;r=r*.4+q*.6;gg=gg*.4+q*.6;b=b*.4+q*.6}
+    img.data[o]=r;img.data[o+1]=gg;img.data[o+2]=b;img.data[o+3]=255}
+  oc.putImageData(img,0,0);return off;
+}
+const outRes=px=>Math.min(Math.round(px*Math.min(2,window.devicePixelRatio||1)),820);
+let isoCtx=null;
+function efn(P){
+  const h=S.mh,X=Math.max(.05,S.wx);
+  if(S.plane==='floor')return(u,w)=>{const d2=u*u+w*w+h*h,d=Math.sqrt(d2),g=Math.acos(clamp(h/d,-1,1))/RAD,C=Math.atan2(w,u)/RAD;return cdAt(P,g,C)*(h/d)/d2};
+  return(u,w)=>{const d2=X*X+u*u+w*w,d=Math.sqrt(d2),g=Math.acos(clamp(-w/d,-1,1))/RAD,C=Math.atan2(u,X)/RAD;return cdAt(P,g,C)*(X/d)/d2};
+}
+function drawIso(){
+  const cv=$('iso'),P=cur.P;if(!P)return;
+  const E=efn(P),h=S.mh,floor=S.plane==='floor';
+  let u0,u1,w0,w1;
+  const probe=floor?{ua:-3*h,ub:3*h,wa:-3*h,wb:3*h}:{ua:-3*h,ub:3*h,wa:-h,wb:.15*h};
+  let mx=0;const NC=70,vals=[];
+  for(let j=0;j<NC;j++){vals.push([]);for(let i=0;i<NC;i++){const u=probe.ua+(probe.ub-probe.ua)*(i+.5)/NC,w=probe.wa+(probe.wb-probe.wa)*(j+.5)/NC,e=E(u,w);vals[j].push(e);mx=Math.max(mx,e)}}
+  let bx0=1e9,bx1=-1e9,by0=1e9,by1=-1e9;
+  for(let j=0;j<NC;j++)for(let i=0;i<NC;i++)if(vals[j][i]>=.03*mx){const u=probe.ua+(probe.ub-probe.ua)*(i+.5)/NC,w=probe.wa+(probe.wb-probe.wa)*(j+.5)/NC;bx0=Math.min(bx0,u);bx1=Math.max(bx1,u);by0=Math.min(by0,w);by1=Math.max(by1,w)}
+  if(floor){
+    let cx=0,cy=0,half=h;if(bx1>bx0){cx=(bx0+bx1)/2;cy=(by0+by1)/2;half=Math.max((bx1-bx0)/2,(by1-by0)/2)*1.15+.15}
+    half=Math.max(half,.4);u0=cx-half;u1=cx+half;w0=cy-half;w1=cy+half;
+  }else{
+    let hw=bx1>bx0?Math.max(Math.abs(bx0),Math.abs(bx1))*1.1+.1:h;hw=Math.max(hw,.5);u0=-hw;u1=hw;w0=-h;w1=.15*h;
+  }
+  const W=Math.max(260,cv.parentElement.clientWidth-28),ml=44,mr=10,mt=10,mb=28,pw=W-ml-mr,ph=clamp(pw*(w1-w0)/(u1-u0),110,560),H=ph+mt+mb;
+  const c=setupCanvas(cv,W,H);
+  const GW=100,GH=Math.max(20,Math.round(GW*ph/pw));
+  const grid=[];let Emax=0;
+  for(let j=0;j<GH;j++){const row=new Float32Array(GW);for(let i=0;i<GW;i++){const u=u0+(u1-u0)*(i+.5)/GW,w=w1-(w1-w0)*(j+.5)/GH,e=E(u,w);row[i]=e;if(e>Emax)Emax=e}grid.push(row)}
+  const cands=[];for(let e=-2;e<=6;e++)for(const m of[1,2,5])cands.push(m*Math.pow(10,e));
+  let levels=cands.filter(x=>x>=.06*Emax&&x<=.95*Emax);
+  if(levels.length>6)levels=levels.filter((_,i)=>i%Math.ceil(levels.length/6)===0);
+  if(levels.length<3)levels=[.1,.25,.5,.75].map(f=>+(f*Emax).toPrecision(2));
+  const off=fieldImage(grid,GW,GH,outRes(pw),outRes(ph),Emax,levels);
+  c.fillStyle=css('--plot-bg');c.fillRect(0,0,W,H);
+  c.imageSmoothingEnabled=true;c.drawImage(off,ml,mt,pw,ph);
+  const mute=css('--mute'),ink=css('--ink');
+  c.font='11px '+css('--f-mono');c.fillStyle=mute;c.strokeStyle=mute;c.lineWidth=1;
+  const step=niceCeil((u1-u0)/6)/(((u1-u0)/6)/niceCeil((u1-u0)/6)>.7?1:1);
+  const tick=(v0,v1,fn)=>{const s=niceCeil((v1-v0)/5);for(let v=Math.ceil(v0/s)*s;v<=v1+1e-9;v+=s)fn(+v.toFixed(6))};
+  c.textAlign='center';c.textBaseline='top';
+  tick(u0,u1,v=>{const x=ml+(v-u0)/(u1-u0)*pw;c.beginPath();c.moveTo(x,mt+ph);c.lineTo(x,mt+ph+4);c.stroke();c.fillText(nstr(v,2),x,mt+ph+6)});
+  c.textAlign='right';c.textBaseline='middle';
+  tick(w0,w1,v=>{const y=mt+ph-(v-w0)/(w1-w0)*ph;c.beginPath();c.moveTo(ml-4,y);c.lineTo(ml,y);c.stroke();c.fillText(nstr(v,2),ml-6,y)});
+  c.strokeStyle='#fff';c.lineWidth=1.5;const ox=ml+(0-u0)/(u1-u0)*pw,oy=mt+ph-(0-w0)/(w1-w0)*ph;
+  if(ox>=ml&&ox<=ml+pw&&oy>=mt&&oy<=mt+ph){c.beginPath();c.moveTo(ox-6,oy);c.lineTo(ox+6,oy);c.moveTo(ox,oy-6);c.lineTo(ox,oy+6);c.stroke()}
+  c.strokeStyle=css('--line');c.lineWidth=1;c.strokeRect(ml+.5,mt+.5,pw,ph);
+  isoCtx={E,u0,u1,w0,w1,ml,mt,pw,ph,floor};
+  $('isoNote').textContent=floor?`floor, ${nstr(S.mh,1)} m below fixture · m`:`wall ${nstr(S.wx,1)} m away · m`;
+  const leg=$('isoLeg');leg.textContent='';
+  const lv=[0,...levels];
+  lv.forEach((L,i)=>{const sp=document.createElement('span'),sw=document.createElement('i'),[r,g,b]=ramp(Math.pow((i===0?0:L)/Emax,.55));sw.style.background=`rgb(${r|0},${g|0},${b|0})`;sp.appendChild(sw);sp.appendChild(document.createTextNode(i===0?'below '+kfmt(levels[0])+' lx':'≥ '+kfmt(L)+' lx'));leg.appendChild(sp)});
+  const sp=document.createElement('span');sp.textContent='peak '+kfmt(Emax)+' lx';sp.style.marginLeft='auto';leg.appendChild(sp);
+}
+function hover(ev){
+  if(!isoCtx)return;const r=$('iso').getBoundingClientRect(),t=ev.touches?ev.touches[0]:ev;
+  const x=t.clientX-r.left,y=t.clientY-r.top,k=isoCtx;
+  if(x<k.ml||x>k.ml+k.pw||y<k.mt||y>k.mt+k.ph){return}
+  const u=k.u0+(x-k.ml)/k.pw*(k.u1-k.u0),w=k.w1-(y-k.mt)/k.ph*(k.w1-k.w0);
+  $('hov').textContent=`${k.floor?'x':'y'} ${u.toFixed(2)} m, ${k.floor?'y':'z'} ${w.toFixed(2)} m → ${kfmt(k.E(u,w))} lx`;
+}
+function lampSvg(){
+  const svg=$('lampSvg');if(S.tab!=='dec'||!cur.info||!cur.info.pts){return}
+  const I=cur.info,pts=I.pts,Wd=260,Hd=250,m=26,span=Math.max(I.zt-I.zb,2*I.rmax)||1,sc=(Hd-2*m)/span;
+  const cx=Wd/2,X=r=>cx+r*sc,Y=z=>Hd-m-(z-I.zb)*sc;
+  const pl=pts.map(p=>`${X(p.r).toFixed(1)},${Y(p.z).toFixed(1)}`),pr=pts.map(p=>`${X(-p.r).toFixed(1)},${Y(p.z).toFixed(1)}`).reverse();
+  const op=.12+.3*(S.dec.T/100);
+  let s=`<polygon points="${pl.concat(pr).join(' ')}" fill="var(--accent)" fill-opacity="${op}" stroke="none"/>`;
+  s+=`<polyline points="${pl.join(' ')}" fill="none" stroke="var(--ink)" stroke-width="2"/><polyline points="${pr.slice().reverse().join(' ')}" fill="none" stroke="var(--ink)" stroke-width="2"/>`;
+  const zt=Y(I.zt),zb=Y(I.zb),rt=pts[pts.length-1].r,rb=pts[0].r;
+  s+=I.openT?`<line x1="${X(-rt)}" y1="${zt}" x2="${X(rt)}" y2="${zt}" stroke="var(--mute)" stroke-dasharray="3 3"/>`:`<line x1="${X(-rt)}" y1="${zt}" x2="${X(rt)}" y2="${zt}" stroke="var(--ink)" stroke-width="2"/>`;
+  s+=I.openB?`<line x1="${X(-rb)}" y1="${zb}" x2="${X(rb)}" y2="${zb}" stroke="var(--mute)" stroke-dasharray="3 3"/>`:`<line x1="${X(-rb)}" y1="${zb}" x2="${X(rb)}" y2="${zb}" stroke="var(--ink)" stroke-width="2"/>`;
+  const zs=I.zs,za=Y(zs[0]),zz=Y(zs[zs.length-1]);
+  s+=zs.length>1?`<line x1="${cx}" y1="${za}" x2="${cx}" y2="${zz}" stroke="var(--curve-a)" stroke-width="4" stroke-linecap="round"/>`:`<circle cx="${cx}" cy="${za}" r="4" fill="var(--curve-a)"/>`;
+  s+=`<text x="6" y="14">H ${nstr((I.zt-I.zb)*1000,0)} mm</text><text x="${Wd-6}" y="14" text-anchor="end">Ø max ${nstr(I.rmax*2000,0)} mm</text>`;
+  svg.innerHTML=s;
+}
+function renderDerived(){
+  const dd=$('dDer'),od=$('oDer'),cd=$('cDer');
+  if(S.tab==='dist'&&cur.A){const a=cur.A;dd.innerHTML=`measured on C0 / C90 planes: beam <b>${bw(a.b50A)} × ${bw(a.b50B)}</b> at 50 %, field <b>${bw(a.b10A)} × ${bw(a.b10B)}</b> at 10 %<br>peak <b>${nstr(a.peak,0)} cd</b> at γ ${nstr(a.pg,0)}°, C ${nstr(a.pc,0)}°`}
+  if(S.tab==='opt'&&cur.info&&cur.info.vis){const G=cur.info,rd=G.dd/2,ro=G.T/2;
+    const hid=G.dep>0?Math.atan((rd+ro)/G.dep)/RAD:90,vis=G.dep>0?Math.max(0,Math.atan((ro-rd)/G.dep)/RAD):(ro>=rd?90:0);
+    let t='';
+    if(S.opt.type!=='bare')t+=`focal length <b>${nstr(G.f*1000,1)} mm</b><br>étendue limit half-angle <b>${nstr(G.thEt/RAD,1)}°</b>, geometric <b>${nstr(G.thGeo/RAD,1)}°</b><br>beam <b>${nstr(2*G.half/RAD,0)}°</b> (50 %)<br>`;
+    t+=`luminous disk fully visible to γ <b>${nstr(vis,0)}°</b>, hidden from <b>${nstr(hid,0)}°</b> (shielding angle <b>${nstr(90-hid,0)}°</b>)`;
+    if(S.opt.type==='reflector'&&G.A/G.D<3)t+=`<br>Exit Ø is under 3× the LED Ø, expect a wide, ragged beam.`;
+    od.innerHTML=t}
+  if(S.tab==='dec'&&cur.info&&cur.info.pts){const I=cur.info;cd.innerHTML=`${I.nP} shade patches, ${I.zs.length} source point${I.zs.length>1?'s':''}<br>${S.dec.dlShare>0?`Downlight module carries ${S.dec.dlShare} % of the output.<br>`:''}${S.dec.ribs>0?'Rib pattern makes the file asymmetric, step 5°.':'Axisymmetric, one C plane stored.'}${I.ok?'':'<br><b>Profile needs at least two points with rising z.</b> Showing a drum instead.'}`}
+}
+const bw=b=>b>=355?'omni':nstr(b,0)+'°';
+function renderMetrics(){
+  const a=cur.A,P=cur.P,M=cur.M;if(!a)return;
+  const eff=S.watts>0?a.flux/S.watts:0,klm=a.flux>0?a.peak/a.flux*1000:0;
+  const items=[
+    ['Peak intensity',kfmt(a.peak)+' cd',`${nstr(klm,0)} cd/klm`],
+    ['Beam 50 %',`${bw(a.b50A)} / ${bw(a.b50B)}`,'C0 / C90 planes'],
+    ['Field 10 %',`${bw(a.b10A)} / ${bw(a.b10B)}`,'C0 / C90 planes'],
+    ['Luminaire flux',nstr(a.flux,0)+' lm',`target ${nstr(M.lumens,0)} lm`],
+    ['Down / up',`${nstr(a.down/a.flux*100,0)} / ${nstr(a.up/a.flux*100,0)} %`,'DLOR / ULOR'],
+    ['Efficacy',S.watts>0?nstr(eff,0)+' lm/W':'–',`${nstr(S.watts,1)} W`]
+  ];
+  const bm=a.b50A>=355?'wide, all-round light':`beam ${nstr(a.b50A,0)}°${Math.abs(a.b50A-a.b50B)>2?' × '+nstr(a.b50B,0)+'°':''}`;
+  $('sumText').textContent=`${S.name||'Luminaire'}: ${nstr(a.flux,0)} lm${S.watts>0?`, ${nstr(S.watts,0)} W (${nstr(eff,0)} lm/W)`:''}, ${S.cct} K. ${bm}, ${nstr(a.down/a.flux*100,0)} % of the light goes down.`;
+  $('metrics').innerHTML=items.map(i=>`<div class="m"><i>${i[0]}</i><b>${i[1]}</b><em>${i[2]}</em></div>`).join('');
+}
+function renderTables(){
+  const a=cur.A,P=cur.P;if(!a)return;
+  const pk=a.peak,ax=[1,2,3,4,5,8,10];
+  const bd=(b,d)=>b>0&&b<160?nstr(2*d*Math.tan(b/2*RAD),2)+' m':'–';
+  $('axial').innerHTML='<tr><th>Distance</th><th>Peak lux</th><th>Ø 50 % C0</th><th>Ø 50 % C90</th></tr>'+ax.map(d=>`<tr><td>${d} m</td><td>${kfmt(pk/(d*d))}</td><td>${bd(a.b50A,d)}</td><td>${bd(a.b50B,d)}</td></tr>`).join('');
+  const gl=[45,55,65,75,85];let rows='';const info=cur.info;
+  gl.forEach(g=>{const I=maxAtGamma(P,g),ar=lumArea(cur.dm,g,info),L=ar>1e-9?I/ar:NaN;rows+=`<tr><td>${g}°</td><td>${kfmt(I)}</td><td>${nstr(a.flux>0?I/a.flux*1000:0,1)}</td><td>${isFinite(L)?kfmt(L):'–'}</td></tr>`});
+  $('glare').innerHTML='<tr><th>γ</th><th>Max cd</th><th>cd/klm</th><th>cd/m²</th></tr>'+rows;
+  $('glareNote').textContent=S.tab==='dec'?'luminance uses cylinder envelope':'max over all C planes';
+}
+function renderCdTable(){
+  if(!$('cdDet').open||!cur.P)return;const P=cur.P,dec=P.cd.flat().reduce((m,x)=>Math.max(m,x),0)>1000?0:1;
+  let t='<table><tr><th>γ \\ C</th>'+P.h.map(c=>`<th>${angStr(c)}°</th>`).join('')+'</tr>';
+  P.v.forEach((g,i)=>{t+=`<tr><td>${angStr(g)}°</td>`+P.h.map((_,j)=>`<td>${P.cd[j][i].toFixed(dec)}</td>`).join('')+'</tr>'});
+  $('cdTable').innerHTML=t+'</table>';
+}
+function renderIES(){
+  const r=cur.parse,ul=$('val');ul.textContent='';
+  const add=(cls,m)=>{const li=document.createElement('li');li.className=cls;li.textContent=m;ul.appendChild(li)};
+  if(r.errors.length===0&&r.warnings.length===0)add('ok','Passes the LM-63 syntax checks.');
+  r.errors.forEach(m=>add('er',m));r.warnings.forEach(m=>add('wn',m));if(S.adv)r.info.forEach(m=>add('in',m));
+  $('ies').textContent=cur.text.replace(/\r\n/g,'\n');
+  const P=cur.P;$('iesMeta').textContent=`${P.v.length} × ${P.h.length} angles · ${(cur.text.length/1024).toFixed(1)} kB`;
+}
+function renderOutNote(){
+  const dm=cur.dm;if(!dm)return;
+  const t=dm.shape==='point'?'point source':dm.shape==='sphere'?`sphere Ø ${nstr(dm.w*1000,0)} mm`:dm.shape==='circle'?`circle Ø ${nstr(dm.w*1000,0)} mm`:dm.shape==='cyl'?`cylinder Ø ${nstr(dm.w*1000,0)} × ${nstr(dm.h*1000,0)} mm`:`${nstr(dm.w*1000,0)} × ${nstr(dm.l*1000,0)} mm`;
+  $('dimsNote').textContent=S.tab==='dist'||S.tab==='imp'?'':'opening: '+t;
+}
+function drawPlots(){drawPolar();drawIso();draw3D();if(ROOM)drawRoom()}
+let raf=0;
+function schedule(){if(!raf)raf=requestAnimationFrame(()=>{raf=0;update()})}
+function update(){
+  Object.keys(panels).forEach(k=>panels[k].hidden=k!==S.tab);
+  document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===S.tab));
+  $('customWrap').hidden=S.dec.mode!=='custom';
+  pushInputs(document);
+  $('tabs').hidden=!(S.tab==='dist'||S.tab==='opt');
+  ['dDer','oDer','cDer'].forEach(id=>{const e=$(id);if(e)e.hidden=!S.adv});
+  $('planeFld').parentElement.hidden=!S.adv;
+  document.querySelectorAll('.tile').forEach(b=>b.setAttribute('aria-pressed',b.dataset.tile===S.start));
+  $('advToggle').checked=S.adv;
+  const out=compute();
+  if(!out){
+    $('metrics').innerHTML='<div class="m"><i>No data</i><b>–</b><em>Load an IES file to plot it</em></div>';$('sumText').textContent='Open an IES file in step 2 to check it.';
+    ['polar','iso'].forEach(id=>{const cv=$(id);cv.getContext('2d').clearRect(0,0,cv.width,cv.height)});
+    ROOM=null;R3.scene=null;renderRoomResults();renderSpecChecks();$('ies').textContent='';$('val').textContent='';$('axial').textContent='';$('glare').textContent='';$('cdTable').textContent='';
+    cur={P:null};return;
+  }
+  cur=Object.assign(cur,out);cur.A=analyse(out.P);cur.parse=parseIES(out.text);
+  renderDerived();renderMetrics();renderTables();renderCdTable();renderIES();renderOutNote();lampSvg();build3D();ROOM=calcRoom();buildRoomScene();renderRoomResults();drawPlots();renderSpecChecks();
+  const a=cur.A;
+  if(S.tab!=='imp'){const f=Math.abs(a.flux-S.lumens)/S.lumens;cur.parse.info.push(`Flux in the table integrates to ${nstr(a.flux,0)} lm against ${nstr(S.lumens,0)} lm requested (${nstr(f*100,1)} % difference from grid sampling).`);renderIES()}
+}
+
+/* ---------------- events ---------------- */
+function onInput(ev){
+  const el=ev.target;if(!el.dataset||!el.dataset.k)return;
+  const k=el.dataset.k;let v;
+  if(el.type==='checkbox')v=el.checked;else if(el.type==='number'||el.type==='range'){v=parseFloat(el.value);if(!isFinite(v))return}else v=el.value;
+  setPath(S,k,v);
+  if(k==='lumens'||k==='watts'){S.eff=S.watts>0?+(S.lumens/S.watts).toFixed(1):S.eff}
+  if(k==='eff'){S.lumens=Math.round(S.eff*S.watts)}
+  if(k==='dec.mat'&&v!=='custom'){S.dec.T=MATS[v][1];if(v==='perf')S.dec.perf=Math.max(S.dec.perf,18)}
+  if(k==='dec.T'){S.dec.mat='custom'}
+  if(['dec.H','dec.dt','dec.db','dec.bulge'].includes(k)&&S.dec.mode!=='custom'){S.dec.preset=S.dec.preset||'custom'}
+  if(k==='dist.lock'&&v)S.dist.beamB=S.dist.beamA;
+  document.querySelectorAll(`[data-k="${k}"]`).forEach(o=>{if(o!==el){if(o.type==='checkbox')o.checked=v;else o.value=v}});
+  schedule();
+}
+document.addEventListener('input',onInput);
+document.addEventListener('change',onInput);
+document.addEventListener('click',ev=>{
+  const b=ev.target.closest('button');if(!b)return;
+  if(b.dataset.tab){S.tab=b.dataset.tab;if(S.tab==='dist'&&!S.name)S.name='Downlight';schedule();return}
+  if(b.dataset.act==='dpre'){const p=PRESETS.dist[+b.dataset.v][1];Object.assign(S.dist,{dip:35},p);schedule();return}
+  if(b.dataset.act==='cpre'){const key=PRESETS.dec[+b.dataset.v][1];Object.assign(S.dec,DEC[key],{preset:key,dlShare:0});schedule();return}
+  if(b.dataset.plane){S.plane=b.dataset.plane;document.querySelectorAll('#planeSeg button').forEach(x=>x.setAttribute('aria-pressed',x===b));schedule();return}
+  if(b.id==='toPts'){const{pts}=profilePts(S.dec);S.dec.custom=pts.filter((_,i)=>i%2===0||i===pts.length-1).map(p=>`${nstr(p.z*1000,1)}, ${nstr(p.r*1000,1)}`).join('\n');S.dec.mode='custom';S.dec.preset='custom';$('decCustom').value=S.dec.custom;schedule();return}
+  if(b.id==='impLoad'){loadImport($('impText').value,'pasted text');return}
+});
+$('decCustom').addEventListener('input',e=>{S.dec.custom=e.target.value;S.dec.mode='custom';schedule()});
+$('impScale').addEventListener('change',e=>{S.rescale=e.target.checked;schedule()});
+$('impFile').addEventListener('change',e=>{
+  const f=e.target.files&&e.target.files[0];if(!f)return;
+  const fr=new FileReader();fr.onload=()=>{$('impText').value=String(fr.result);loadImport(String(fr.result),f.name)};fr.readAsText(f);
+});
+function loadImport(text,label){
+  const res=parseIES(text);S.imp.text=text;S.imp.res=res;S.imp.data=res.data;
+  const msg=$('impMsg');
+  if(res.errors.length||!res.data){msg.textContent='Could not read this file: '+(res.errors[0]||'no data found')+'.';S.imp.data=null;schedule();return}
+  if(!res.plotable){msg.textContent='Parsed, but only type C photometry can be plotted.';S.imp.data=null;schedule();return}
+  const d=res.data;
+  msg.textContent=`Loaded ${label}: ${res.warnings.length} warning${res.warnings.length===1?'':'s'}.`;
+  S.lumens=Math.round(res.stats.flux);S.watts=d.watts||S.watts;S.eff=S.watts>0?+(S.lumens/S.watts).toFixed(1):S.eff;
+  if(d.keys.LUMINAIRE)S.name=d.keys.LUMINAIRE.slice(0,60);if(d.keys.MANUFAC)S.manu=d.keys.MANUFAC.slice(0,60);if(d.keys.LUMCAT)S.cat=d.keys.LUMCAT.slice(0,60);
+  S.tab='imp';schedule();
+}
+document.querySelectorAll('#iso').forEach(cv=>{cv.addEventListener('mousemove',hover);cv.addEventListener('touchmove',hover,{passive:true});cv.addEventListener('touchstart',hover,{passive:true})});
+$('cdDet').addEventListener('toggle',renderCdTable);
+let rt=0;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(drawPlots,80)});
+if(window.matchMedia)matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>setTimeout(drawPlots,30));
+new MutationObserver(()=>setTimeout(drawPlots,30)).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+
+/* ---------------- export ---------------- */
+let dl=null;
+const toast=m=>{$('toast').textContent=m;clearTimeout(toast.t);toast.t=setTimeout(()=>$('toast').textContent='',4000)};
+const fname=()=>(S.name||'luminaire').replace(/[^\w.\-]+/g,'_').replace(/^_+|_+$/g,'')||'luminaire';
+const crcT=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(b){let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=crcT[(c^b[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0}
+function zipStore(name,text){
+  const en=new TextEncoder(),data=en.encode(text),nm=en.encode(name),crc=crc32(data),d=new Date();
+  const tm=(d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1),dt=((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate();
+  const lh=new DataView(new ArrayBuffer(30));
+  lh.setUint32(0,0x04034b50,true);lh.setUint16(4,20,true);lh.setUint16(6,0x0800,true);lh.setUint16(8,0,true);lh.setUint16(10,tm,true);lh.setUint16(12,dt,true);lh.setUint32(14,crc,true);lh.setUint32(18,data.length,true);lh.setUint32(22,data.length,true);lh.setUint16(26,nm.length,true);lh.setUint16(28,0,true);
+  const ch=new DataView(new ArrayBuffer(46));
+  ch.setUint32(0,0x02014b50,true);ch.setUint16(4,20,true);ch.setUint16(6,20,true);ch.setUint16(8,0x0800,true);ch.setUint16(10,0,true);ch.setUint16(12,tm,true);ch.setUint16(14,dt,true);ch.setUint32(16,crc,true);ch.setUint32(20,data.length,true);ch.setUint32(24,data.length,true);ch.setUint16(28,nm.length,true);
+  const cdOff=30+nm.length+data.length,cdLen=46+nm.length;
+  const ed=new DataView(new ArrayBuffer(22));
+  ed.setUint32(0,0x06054b50,true);ed.setUint16(8,1,true);ed.setUint16(10,1,true);ed.setUint32(12,cdLen,true);ed.setUint32(16,cdOff,true);
+  return new Blob([lh,nm,data,ch,nm,ed],{type:'application/zip'});
+}
+async function save(filename,data){
+  if(!dl){toast('Saving is not available in this view, use Copy text.');return}
+  try{const r=await dl.save({filename,data});toast(r.status==='saved'?'Saved '+filename:'Sent')}
+  catch(e){toast(e&&e.code==='declined'?'Save cancelled.':'Could not save ('+(e&&e.code||'error')+').')}
+}
+$('bZip').addEventListener('click',()=>{if(cur.text)save(fname()+'.zip',zipStore(fname()+'.ies',cur.text))});
+$('bTxt').addEventListener('click',()=>{if(cur.text)save(fname()+'.ies.txt',cur.text)});
+$('bCopy').addEventListener('click',async()=>{
+  if(!cur.text)return;
+  try{await navigator.clipboard.writeText(cur.text);toast('Copied IES text.')}
+  catch(e){const r=document.createRange();r.selectNodeContents($('ies'));const s=getSelection();s.removeAllRanges();s.addRange(r);toast('Text selected, press copy.')}
+});
+(async()=>{try{dl=await (window.claude&&window.claude.use?window.claude.use('downloads'):null)}catch(e){dl=null}
+  if(!dl){$('bZip').hidden=true;$('bTxt').hidden=true;$('d3Save').hidden=true}})();
+
+
+/* ---------------- spec sheet reader ---------------- */
+const SPEC_EXAMPLE=`LIGHTING FIXTURE REFERENCE:
+D1  QTY 8
+MULTIPLE AREAS - BESPOKE
+Pendant - Bespoke
+Material: Acrylic or PC Shade (Pattern or finish), Metal in Plated.
+PRODUCT DESCRIPTION
+Voltage: 230V
+Wattage: 25W
+Bespoke suspended lighting fixture, medium size. The lighting fixture shall direct light downwards. At the same time the lighting fixtures shade shall have a pattern or finish, so it appears translucent and creates a warm and diffused light.
+Dimensions: max. ø300mm
+Dimension: 300mm dia x 565mm H
+5W LED Tube
+20W LED
+UGR: <19
+IP-Rating: min. IP20
+Color temperature: 3000K
+Optical Distribution: Symmetrical
+Color rendering in accordance with the latest edition of TM30: Rf >= 90, Rg >= 95
+System lumen output: min. 1250lm. Efficacy: min. 50lm/W
+Control gear type: DALI, remote driver`;
+const toNum=x=>{if(x==null||x==='')return null;const n=parseFloat(String(x).replace(/,/g,''));return isFinite(n)?n:null};
+function parseSpecText(t){
+  const T=t.replace(/≥/g,'>=').replace(/[\r\n]+/g,' ').replace(/\s+/g,' ');
+  const m=(re,i=1)=>{const r=T.match(re);return r?r[i]:null};
+  const sp={};
+  sp.code=(T.match(/\b[A-Z]{1,3}\d{1,3}\b/g)||[]).find(c=>!/^(IP|TM|UGR|CRI|DC|AC|F|P|R|Rf|Rg)\d/.test(c))||null;
+  const ty=T.match(/\b(Pendant|Downlight|Wall washer|Wall light|Linear|Floor lamp|Table lamp|Spotlight|Bollard|Chandelier)\b[ \-–]*(Bespoke|Custom)?/i);
+  sp.title=ty?(ty[1]+(ty[2]?' ('+ty[2].toLowerCase()+')':'')):null;
+  sp.minLm=toNum(m(/lumen output[^0-9]{0,20}([\d,\.]+)\s*lm/i)||m(/([\d,\.]+)\s*lm\b/i));
+  sp.minEff=toNum(m(/efficacy[^0-9]{0,20}([\d\.]+)\s*lm\/?W/i));
+  sp.watts=toNum(m(/watt(?:age)?[^0-9]{0,10}([\d\.]+)\s*W\b/i));
+  sp.cct=toNum(m(/\b(\d{4})\s*K\b/));
+  sp.cri=toNum(m(/\bCRI[^0-9]{0,10}(\d{2})/i)||m(/\bRf\s*>=?\s*(\d{2})/i));
+  sp.dia=toNum(m(/[øØ⌀]\s*(\d+)\s*mm/i)||m(/(\d+)\s*mm\s*dia/i));
+  sp.h=toNum(m(/dia\w*\s*[x×]\s*(\d+)\s*mm\s*H/i)||m(/(\d+)\s*mm\s*H\b/));
+  sp.ugr=toNum(m(/UGR\s*:?\s*[<≤]\s*(\d+)/i));
+  sp.ip=toNum(m(/\bIP\s?(\d\d)/i));
+  sp.beam=toNum(m(/(\d{2,3})\s*°?\s*(?:deg\w*\s*)?beam/i));
+  const src=[...T.matchAll(/(\d+(?:\.\d+)?)\s*W\s*LED\s*(tube|strip|filament|module)?/gi)].map(x=>({w:+x[1],k:(x[2]||'').toLowerCase()}));
+  const tube=src.find(x=>/tube|strip|filament/.test(x.k)),mod=src.find(x=>!/tube|strip|filament/.test(x.k));
+  sp.tubeW=tube?tube.w:null;sp.downW=mod&&tube?mod.w:null;
+  sp.shape=/globe|sphere|ball/i.test(T)?'globe':/dome|hemisphere/i.test(T)?'dome':/cone|bell|flared/i.test(T)?'bell':'cyl';
+  sp.material=m(/Material\s*:?\s*([^.]{0,90})/i);
+  sp.downward=/downward|light down|down ?light/i.test(T);
+  sp.symmetrical=/symmetr/i.test(T);
+  sp.translucent=/translucent|diffus|opal|acrylic|polycarbonate|\bPC\b/i.test(T);
+  sp.notes=[];
+  return sp;
+}
+function cleanSpec(o){
+  const n=['minLm','minEff','watts','cct','cri','dia','h','ugr','ip','beam','tubeW','downW'],r={};
+  for(const k of n)r[k]=toNum(o[k]);
+  for(const k of ['code','title','material'])r[k]=o[k]?String(o[k]).slice(0,80):null;
+  r.shape=['cyl','globe','dome','bell','rect','other'].includes(o.shape)?o.shape:'cyl';
+  for(const k of ['downward','symmetrical','translucent'])r[k]=!!o[k];
+  r.notes=Array.isArray(o.notes)?o.notes.map(String).slice(0,6):[];
+  return r;
+}
+function applySpec(sp,via){
+  const A=[],G=[];
+  const sheet=sp.shape==='rect'||sp.shape==='other';
+  S.spec=sp;
+  S.name=((sp.code?sp.code+' ':'')+(sp.title||'Luminaire')).slice(0,60);S.cat=sp.code||S.cat;
+  if(sp.watts)S.watts=sp.watts;
+  if(sp.minLm)S.lumens=sp.minLm;else if(sp.watts&&sp.minEff){S.lumens=Math.round(sp.watts*sp.minEff);A.push(`Output taken as ${S.lumens} lm from ${sp.watts} W × ${sp.minEff} lm/W.`)}
+  S.eff=S.watts>0?+(S.lumens/S.watts).toFixed(1):S.eff;
+  if(sp.cct)S.cct=sp.cct;if(sp.cri)S.cri=sp.cri;
+  if(sp.minLm)G.push(`Output ${sp.minLm} lm minimum`);if(sp.watts)G.push(`${sp.watts} W`);if(sp.cct)G.push(`${sp.cct} K`);if(sp.cri)G.push(`CRI / Rf ${sp.cri}`);
+  if(sp.dia)G.push(`Ø ${sp.dia} mm`);if(sp.h)G.push(`${sp.h} mm high`);if(sp.ugr)G.push(`UGR < ${sp.ugr}`);if(sp.ip)G.push(`IP${sp.ip}`);
+  if(sp.tubeW)G.push(`${sp.tubeW} W LED tube`);if(sp.downW)G.push(`${sp.downW} W downlight module`);
+  if(sp.translucent||sp.tubeW||/pendant/i.test(sp.title||'')&&!sheet){
+    const key=sp.shape==='globe'?'globe':sp.shape==='dome'?'dome':sp.shape==='bell'?'bell':'drum';
+    Object.assign(S.dec,DEC[key],{preset:key,dlShare:0,ribs:0,perf:0});
+    const dia=sp.dia||S.dec.dt,h=sp.h||S.dec.H;
+    if(key==='globe'){S.dec.dt=S.dec.db=dia;S.dec.H=sp.h||dia}
+    else if(key==='bell'){S.dec.db=dia;S.dec.dt=Math.round(dia*.3);S.dec.H=h}
+    else if(key==='dome'){S.dec.dt=S.dec.db=dia;S.dec.H=sp.h||Math.round(dia/2)}
+    else{S.dec.dt=S.dec.db=dia;S.dec.H=h}
+    S.dec.topOpen=false;S.dec.botOpen=!!sp.downward;
+    if(!sp.dia)A.push('No diameter found, default shade size used.');
+    const mt=(sp.material||'')+' '+(sp.translucent?'translucent':'');
+    S.dec.mat=/frost/i.test(mt)?'frosted':/fabric|textile/i.test(mt)?'fabric':/paper/i.test(mt)?'paper':/perforat/i.test(mt)?'perf':'opal';
+    S.dec.T=S.dec.mat==='perf'?3:S.dec.mat==='frosted'?72:S.dec.mat==='fabric'?35:S.dec.mat==='paper'?45:50;
+    if(S.dec.mat==='perf')S.dec.perf=18;
+    A.push(`Shade material read as ${MATS[S.dec.mat][0].toLowerCase()}, ${S.dec.T} % transmittance. Check against the sample.`);
+    if(sp.tubeW){S.dec.src='line';S.dec.srcLen=Math.round(clamp(S.dec.H*.7,0,S.dec.H-60));S.dec.srcPos=55;A.push(`LED tube modelled as a ${S.dec.srcLen} mm vertical filament at 55 % of the height.`)}
+    else{S.dec.src='ball';A.push('No inner source named, a point source in the middle of the shade is used.')}
+    if(sp.downW&&sp.tubeW){S.dec.dlShare=clamp(Math.round(100*sp.downW/(sp.downW+.5*sp.tubeW)),0,100);S.dec.dlBeam=sp.beam||100;A.push(`Downlight module carries ${S.dec.dlShare} % of the output (assumes the translucent shade passes about half of the tube light). Beam angle ${S.dec.dlBeam}° assumed${sp.beam?'':', the sheet gives none'}.`)}
+    else if(sp.downward)A.push('Bottom left open so the source sends light downwards through it.');
+    if(sp.symmetrical)G.push('symmetrical distribution');
+    S.tab='dec';
+  }else{
+    Object.assign(S.dist,{profile:'gauss',beamA:sp.beam||60,beamB:sp.beam||60,lock:true,tilt:0,azim:0,cutoff:90,up:sp.downward?0:20});
+    S.shape='circle';if(sp.dia)S.dimW=sp.dia;
+    A.push(`No shade found. Modelled as a ${sp.beam||60}° Gaussian beam${sp.beam?'':' (assumed)'}, switch to the Optics tab to derive it from the optic.`);
+    S.tab='dist';
+  }
+  if(sp.ugr)A.push(`UGR < ${sp.ugr} needs a room layout, not calculated here. The glare table gives luminance at 65–85°.`);
+  const ul=$('specList');ul.textContent='';
+  const add=(c,t)=>{const li=document.createElement('li');li.className=c;li.textContent=t;ul.appendChild(li)};
+  add('ok',`Read via ${via}: ${G.join(', ')||'nothing recognised'}.`);
+  A.forEach(t=>add('in',t));(sp.notes||[]).forEach(t=>add('in',t));
+  $('specMsg').textContent='Model filled in. Adjust it on the tab below, then save the IES file.';
+  schedule();
+}
+function renderSpecChecks(){
+  const sp=S.spec,ul=$('specChk'),h=$('specChkH');ul.textContent='';
+  h.hidden=!sp||!cur.A;if(!sp||!cur.A)return;
+  const a=cur.A,add=(c,t)=>{const li=document.createElement('li');li.className=c;li.textContent=t;ul.appendChild(li)};
+  const eff=S.watts>0?a.flux/S.watts:0;
+  if(sp.minLm)add(a.flux>=sp.minLm*.98?'ok':'er',`Output ${nstr(a.flux,0)} lm against ${sp.minLm} lm minimum`);
+  if(sp.minEff&&S.watts>0)add(eff>=sp.minEff*.98?'ok':'er',`Efficacy ${nstr(eff,0)} lm/W against ${sp.minEff} lm/W minimum`);
+  if(sp.dia&&cur.dm)add(cur.dm.w*1000<=sp.dia+1?'ok':'er',`Opening Ø ${nstr(cur.dm.w*1000,0)} mm against max ${sp.dia} mm`);
+  if(sp.cct)add(S.cct===sp.cct?'ok':'wn',`CCT ${S.cct} K against ${sp.cct} K`);
+  if(sp.cri)add(S.cri>=sp.cri?'ok':'wn',`CRI / Rf ${S.cri} against ≥ ${sp.cri}`);
+  if(sp.symmetrical)add(cur.P.h.length===1?'ok':'wn',cur.P.h.length===1?'Distribution is rotationally symmetric':'Distribution is not rotationally symmetric');
+  if(sp.downward)add(a.down/a.flux>.5?'ok':'wn',`${nstr(a.down/a.flux*100,0)} % of the flux goes downwards`);
+  if(sp.ugr)add('in',`UGR < ${sp.ugr}: needs a room layout, see glare table`);
+}
+async function readSpec(){
+  const text=$('specText').value.trim(),file=$('specImg').files&&$('specImg').files[0];
+  if(!text&&!file){$('specMsg').textContent='Paste the spec text or attach a screenshot first.';return}
+  const btn=$('specGo');btn.disabled=true;$('specMsg').textContent='Reading…';
+  let sp=null,via='text rules';
+  const rx=text?parseSpecText(text):null;
+  try{
+    const sm=await (window.claude&&window.claude.use?window.claude.use('sample'):null);
+    if(sm){
+      const lim=await sm.limits();const useImg=file&&lim&&lim.images;
+      const prompt='You read a lighting fixture reference sheet. Reply with JSON only. Keys, null where absent: code (string, e.g. D1), title (string, e.g. Pendant), minLm (number, minimum system lumen output), minEff (number lm/W), watts (number, total), cct (number K), cri (number, CRI Ra or Rf), dia (number mm, maximum diameter), h (number mm, height), ugr (number, limit), ip (number, e.g. 20), shape (one of "cyl","globe","dome","bell","rect","other"), material (string), downward (boolean, light goes down), symmetrical (boolean), translucent (boolean, translucent or diffusing shade), tubeW (number, watts of an LED tube, strip or filament inside a shade), downW (number, watts of a separate LED module aimed downwards), beam (number degrees or null), notes (array of up to 4 short strings for anything that affects photometry).'+(text?'\n\nSheet text:\n'+text:'\n\nThe sheet is in the attached image.');
+      const out=await sm.json(prompt,useImg?{images:[file],modelTier:'default'}:{modelTier:'default'});
+      if(out&&typeof out==='object'){sp=cleanSpec(out);via='Claude';
+        if(rx)for(const k of Object.keys(rx)){if(sp[k]==null||sp[k]===false&&rx[k]===true)sp[k]=rx[k]}}
+    }
+  }catch(e){if(file&&!text)$('specMsg').textContent='Could not read the screenshot ('+((e&&e.code)||'error')+'). Paste the text instead.'}
+  if(!sp&&rx){sp=rx}
+  btn.disabled=false;
+  if(!sp){return}
+  applySpec(sp,via);
+}
+$('specGo').addEventListener('click',readSpec);
+$('specEx').addEventListener('click',()=>{$('specText').value=SPEC_EXAMPLE;$('specMsg').textContent='Example loaded, press Read spec.'});
+
+
+/* ---------------- 3D view ---------------- */
+const D3={yaw:-.85,pitch:.42,zoom:1,layer:'both',scene:null,drag:null};
+const V3={sub:(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],dot:(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],cross:(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],norm:a=>{const l=Math.hypot(a[0],a[1],a[2])||1;return[a[0]/l,a[1]/l,a[2]/l]}};
+let LOD=1;
+function q3revolve(pts,seg,col,alpha,tag,edge=true){
+  seg=Math.max(8,Math.round(seg*LOD));if(LOD<1&&pts.length>12){const st=Math.ceil(1/LOD);pts=pts.filter((_,i)=>i%st===0||i===pts.length-1)}
+  const q=[];
+  for(let i=0;i<pts.length-1;i++){const a=pts[i],b=pts[i+1];if(a.r<1e-6&&b.r<1e-6)continue;
+    for(let j=0;j<seg;j++){const t0=j/seg*2*Math.PI,t1=(j+1)/seg*2*Math.PI,c0=Math.cos(t0),s0=Math.sin(t0),c1=Math.cos(t1),s1=Math.sin(t1);
+      q.push({v:[[a.r*c0,a.r*s0,a.z],[a.r*c1,a.r*s1,a.z],[b.r*c1,b.r*s1,b.z],[b.r*c0,b.r*s0,b.z]],c:col,a:alpha,tag,edge})}}
+  return q;
+}
+function q3disc(r,z,seg,col,alpha,tag,edge=true){
+  seg=Math.max(8,Math.round(seg*LOD));const q=[];if(r<1e-6)return q;
+  for(let j=0;j<seg;j++){const t0=j/seg*2*Math.PI,t1=(j+1)/seg*2*Math.PI;q.push({v:[[0,0,z],[r*Math.cos(t0),r*Math.sin(t0),z],[r*Math.cos(t1),r*Math.sin(t1),z]],c:col,a:alpha,tag,edge})}
+  return q;
+}
+function q3box(w,l,z0,z1,col,alpha,tag){
+  const x=w/2,y=l/2,P=[[-x,-y,z0],[x,-y,z0],[x,y,z0],[-x,y,z0],[-x,-y,z1],[x,-y,z1],[x,y,z1],[-x,y,z1]];
+  return[[0,3,2,1],[4,5,6,7],[0,1,5,4],[1,2,6,5],[2,3,7,6],[3,0,4,7]].map(f=>({v:f.map(i=>P[i]),c:col,a:alpha,tag,edge:true}));
+}
+function q3sphere(r,cz,seg,col,alpha,tag,edge=false){
+  const pts=[];for(let k=0;k<=8;k++){const t=Math.PI*k/8;pts.push({z:cz-r*Math.cos(t),r:r*Math.sin(t)})}
+  return q3revolve(pts,seg,col,alpha,tag,edge);
+}
+function buildFixture(){
+  const q=[],M=[225,218,205],METAL=[150,156,162],LED=[255,236,170];
+  let origin=[0,0,0];
+  if(S.tab==='dec'&&cur.info&&cur.info.pts){
+    const I=cur.info,pts=I.pts,rT=pts[pts.length-1].r,rB=pts[0].r;
+    q.push(...q3revolve(pts,56,M,.4,'shade'));
+    if(!I.openT)q.push(...q3disc(rT,I.zt,40,M,.4,'shade'));
+    if(!I.openB)q.push(...q3disc(rB,I.zb,40,M,.4,'shade'));
+    const zs=I.zs;
+    if(zs.length>1)q.push(...q3revolve([{z:zs[0],r:.004},{z:zs[zs.length-1],r:.004}],10,LED,1,'src',false));
+    else q.push(...q3sphere(.01,zs[0],12,LED,1,'src'));
+    if(S.dec.dlShare>0)q.push(...q3disc(rB*.9,I.zb+.004,40,LED,1,'src',false));
+    if(rT>.002||true)q.push(...q3revolve([{z:I.zt,r:.003},{z:I.zt+Math.max(.4,(I.zt-I.zb)*.8),r:.003}],8,[70,70,70],1,'rod',false));
+    origin=[0,0,S.dec.dlShare>50?I.zb:(zs[0]+zs[zs.length-1])/2];
+  }else if(S.tab==='opt'){
+    const O=S.opt,D=O.D/2000,A=O.A/2000,H=O.H/1000,T=O.trim/2000,rec=O.recess/1000;
+    if(O.type==='reflector'){const f=A*A*4/(4*4*A*2*H/2)||1,ff=(O.A/1000)**2/(16*H);const pts=[];for(let k=0;k<=24;k++){const z=H*k/24;pts.push({z,r:Math.sqrt(Math.max(0,4*ff*(H-z)))})}
+      q.push(...q3revolve(pts,48,METAL,.75,'body'));q.push(...q3disc(D,H,24,LED,1,'src',false));
+      q.push(...q3revolve([{z:-.004,r:T},{z:0,r:T}],48,[80,80,80],1,'body'))}
+    else if(O.type==='tir'){q.push(...q3revolve([{z:rec,r:A},{z:rec+H,r:A}],48,[190,205,215],.5,'body'));q.push(...q3disc(A,rec,40,[190,205,215],.6,'body'));q.push(...q3disc(D,rec+H,24,LED,1,'src',false));
+      q.push(...q3revolve([{z:0,r:T},{z:rec,r:T}],48,[80,80,80],.8,'body'))}
+    else{q.push(...q3revolve([{z:0,r:T},{z:rec,r:T}],48,METAL,.7,'body'));q.push(...q3disc(D,rec,24,LED,1,'src',false))}
+    origin=[0,0,0];
+  }else{
+    const dm=cur.dm||{shape:'point',w:0,l:0,h:0},w=Math.max(dm.w,.01),th=Math.max(dm.h,.03);
+    if(dm.shape==='rect')q.push(...q3box(w,Math.max(dm.l,.01),0,th,METAL,.85,'body'));
+    else if(dm.shape==='sphere')q.push(...q3sphere(w/2,0,32,M,.5,'body',true));
+    else if(dm.shape==='cyl')q.push(...q3revolve([{z:0,r:w/2},{z:th,r:w/2}],40,M,.5,'body'));
+    else if(dm.shape==='circle'){q.push(...q3revolve([{z:0,r:w/2},{z:.04,r:w/2}],40,METAL,.85,'body'));q.push(...q3disc(w/2,0,40,LED,1,'src',false))}
+    else q.push(...q3sphere(.006,0,10,LED,1,'src'));
+    origin=dm.shape==='sphere'?[0,0,0]:dm.shape==='cyl'?[0,0,th/2]:[0,0,0];
+  }
+  return{q,origin};
+}
+function buildSolid(P,origin,R,peak){
+  const nk=30,nj=30,pt=[];
+  for(let k=0;k<=nk;k++){pt.push([]);const g=k*180/nk;for(let j=0;j<nj;j++){const C=j*360/nj,r=peak>0?cdAt(P,g,C)/peak:0,sg=Math.sin(g*RAD),cg=Math.cos(g*RAD);
+    pt[k].push({p:[origin[0]+R*r*sg*Math.cos(C*RAD),origin[1]+R*r*sg*Math.sin(C*RAD),origin[2]-R*r*cg],r})}}
+  const q=[];
+  for(let k=0;k<nk;k++)for(let j=0;j<nj;j++){const a=pt[k][j],b=pt[k+1][j],c=pt[k+1][(j+1)%nj],d=pt[k][(j+1)%nj],t=(a.r+b.r+c.r+d.r)/4;
+    if(a.r+b.r+c.r+d.r<1e-4)continue;
+    q.push({v:[a.p,b.p,c.p,d.p],t,a:.6,tag:'solid',edge:false})}
+  return q;
+}
+function build3D(){
+  if(!cur.P){D3.scene=null;return}
+  const fx=buildFixture(),peak=cur.A.peak;
+  let mn=[1e9,1e9,1e9],mx=[-1e9,-1e9,-1e9];
+  for(const f of fx.q)if(f.tag!=='rod')for(const v of f.v)for(let i=0;i<3;i++){mn[i]=Math.min(mn[i],v[i]);mx[i]=Math.max(mx[i],v[i])}
+  const ext=Math.max(mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2],.05),R=Math.max(.3,.9*ext);
+  const sol=buildSolid(cur.P,fx.origin,R,peak);
+  const all=[...fx.q,...sol];
+  mn=[1e9,1e9,1e9];mx=[-1e9,-1e9,-1e9];
+  for(const f of all)for(const v of f.v)for(let i=0;i<3;i++){mn[i]=Math.min(mn[i],v[i]);mx[i]=Math.max(mx[i],v[i])}
+  const T=[(mn[0]+mx[0])/2,(mn[1]+mx[1])/2,(mn[2]+mx[2])/2];
+  let Rb=.1;for(const f of all)for(const v of f.v)Rb=Math.max(Rb,Math.hypot(v[0]-T[0],v[1]-T[1],v[2]-T[2]));
+  D3.scene={fix:fx.q,sol,origin:fx.origin,R,T,Rb,dist:Rb*2.7,peak};
+  $('d3Note').textContent=`ring radius ${nstr(R*1000,0)} mm = ${kfmt(peak)} cd`;
+}
+function draw3D(){
+  const cv=$('d3');if(!cv)return;
+  const w=Math.max(260,cv.parentElement.clientWidth-28),h=Math.min(480,Math.round(w*.78)),c=setupCanvas(cv,w,h);
+  c.fillStyle=css('--plot-bg');c.fillRect(0,0,w,h);
+  const sc=D3.scene;if(!sc)return;
+  const dist=sc.dist*D3.zoom,y=D3.yaw,p=D3.pitch,T=sc.T;
+  const eye=[T[0]+dist*Math.cos(p)*Math.cos(y),T[1]+dist*Math.cos(p)*Math.sin(y),T[2]+dist*Math.sin(p)];
+  const fwd=V3.norm(V3.sub(T,eye)),right=V3.norm(V3.cross(fwd,[0,0,1])),up=V3.cross(right,fwd),f=1.1*Math.min(w,h),cx=w/2,cy=h/2;
+  const proj=v=>{const r=V3.sub(v,eye),zc=V3.dot(r,fwd);return[cx+f*V3.dot(r,right)/zc,cy-f*V3.dot(r,up)/zc,zc]};
+  const list=[];
+  const add=arr=>{for(const q of arr){const pv=q.v.map(proj);if(pv.some(a=>a[2]<=.01))continue;list.push({q,pv,d:pv.reduce((s,a)=>s+a[2],0)/pv.length})}};
+  if(D3.layer!=='sol')add(sc.fix);if(D3.layer!=='fix')add(sc.sol);
+  list.sort((a,b)=>b.d-a.d);
+  const ink=css('--ink'),head=[-fwd[0],-fwd[1],-fwd[2]];
+  // reference ring at the source plane
+  c.strokeStyle=css('--mute');c.lineWidth=1;c.setLineDash([4,4]);c.beginPath();
+  for(let i=0;i<=72;i++){const t=i/72*2*Math.PI,a=proj([sc.origin[0]+sc.R*Math.cos(t),sc.origin[1]+sc.R*Math.sin(t),sc.origin[2]]);i?c.lineTo(a[0],a[1]):c.moveTo(a[0],a[1])}
+  c.stroke();c.setLineDash([]);
+  for(const it of list){
+    const q=it.q,v=q.v,n=V3.norm(V3.cross(V3.sub(v[1],v[0]),V3.sub(v[2],v[0]))),lum=.5+.5*Math.abs(V3.dot(n,head));
+    let col;
+    if(q.tag==='solid'){const[r,g,b]=ramp(Math.pow(q.t,.7));col=[r*(.65+.35*lum),g*(.65+.35*lum),b*(.65+.35*lum)]}
+    else if(q.tag==='src')col=q.c;
+    else col=q.c.map(x=>x*(.6+.4*lum));
+    c.beginPath();c.moveTo(it.pv[0][0],it.pv[0][1]);for(let i=1;i<it.pv.length;i++)c.lineTo(it.pv[i][0],it.pv[i][1]);c.closePath();
+    c.globalAlpha=q.a;c.fillStyle=`rgb(${col[0]|0},${col[1]|0},${col[2]|0})`;c.fill();c.globalAlpha=1;
+    if(q.edge){c.strokeStyle=ink;c.globalAlpha=.22;c.lineWidth=.6;c.stroke();c.globalAlpha=1}
+  }
+  c.fillStyle=css('--mute');c.font='11px '+css('--f-mono');c.textAlign='left';
+  c.fillText('light travels down (−Z)',8,h-8);
+}
+function exportOBJ(){
+  const sc=D3.scene;if(!sc)return null;
+  const L=['# Candela Bench model','# metres, Z up, light travels toward -Z, origin at the source point plane'],idx=new Map(),vs=[];
+  const vi=v=>{const k=v.map(x=>x.toFixed(5)).join(' ');if(!idx.has(k)){idx.set(k,vs.length+1);vs.push(k)}return idx.get(k)};
+  const faces=[];
+  const grp=(name,arr)=>{faces.push('o '+name);for(const q of arr)faces.push('f '+q.v.map(vi).join(' '))};
+  grp('Fixture',sc.fix);grp('LightSolid',sc.sol);
+  return L.concat(vs.map(k=>'v '+k),faces).join('\n')+'\n';
+}
+(function(){
+  const cv=$('d3');
+  cv.addEventListener('pointerdown',e=>{D3.drag={x:e.clientX,y:e.clientY};cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing'});
+  cv.addEventListener('pointermove',e=>{if(!D3.drag)return;D3.yaw-=(e.clientX-D3.drag.x)*.008;D3.pitch=clamp(D3.pitch+(e.clientY-D3.drag.y)*.008,-1.45,1.45);D3.drag={x:e.clientX,y:e.clientY};draw3D()});
+  const end=()=>{D3.drag=null;cv.style.cursor='grab'};cv.addEventListener('pointerup',end);cv.addEventListener('pointercancel',end);
+  cv.addEventListener('wheel',e=>{e.preventDefault();zoom3(Math.exp(e.deltaY*.001))},{passive:false});
+  $('d3In').addEventListener('click',()=>zoom3(.8));$('d3Out').addEventListener('click',()=>zoom3(1.25));
+  $('d3Reset').addEventListener('click',()=>{D3.yaw=-.85;D3.pitch=.42;D3.zoom=1;draw3D()});
+  document.querySelectorAll('#layerSeg button').forEach(b=>b.addEventListener('click',()=>{D3.layer=b.dataset.layer;document.querySelectorAll('#layerSeg button').forEach(x=>x.setAttribute('aria-pressed',x===b));draw3D()}));
+  $('d3Save').addEventListener('click',()=>{const t=exportOBJ();if(t)save(fname()+'_3d.zip',zipStore(fname()+'.obj',t))});
+})();
+function zoom3(k){D3.zoom=clamp(D3.zoom*k,.3,3);draw3D()}
+
+
+/* ---------------- room calculation (DIALux style) ---------------- */
+const R3={yaw:-.8,pitch:.5,zoom:1,drag:null,scene:null};
+let ROOM=null;
+function calcRoom(){
+  const r=S.room,P=cur.P;if(!P||!cur.A||!D3.scene)return null;
+  const L=Math.max(1,r.L),W=Math.max(1,r.W),H=Math.max(1.8,r.H),cs=Math.max(.12,Math.max(L,W,H)/46);
+  let oz=H;
+  if(S.tab==='dec'&&cur.info&&cur.info.pts){const I=cur.info;oz=H-(r.rod+(I.zt-D3.scene.origin[2]))}
+  const nx=Math.max(1,Math.round(r.nx)),ny=Math.max(1,Math.round(r.ny)),lums=[];
+  for(let j=0;j<ny;j++)for(let i=0;i<nx;i++)lums.push([L*(i+.5)/nx,W*(j+.5)/ny,oz]);
+  const Ed=(p,n)=>{let t=0;for(const c of lums){const dx=p[0]-c[0],dy=p[1]-c[1],dz=p[2]-c[2],d2=dx*dx+dy*dy+dz*dz;if(d2<1e-6)continue;const d=Math.sqrt(d2),ux=dx/d,uy=dy/d,uz=dz/d,ct=-(ux*n[0]+uy*n[1]+uz*n[2]);if(ct<=0)continue;
+    t+=cdAt(P,Math.acos(clamp(-uz,-1,1))/RAD,Math.atan2(uy,ux)/RAD-r.rot)*ct/d2}return t};
+  const defs=[['Floor',[0,0,0],[L,0,0],[0,W,0],[0,0,1],r.rf],['Ceiling',[0,0,H],[L,0,0],[0,W,0],[0,0,-1],r.rc],
+    ['Wall S',[0,0,0],[L,0,0],[0,0,H],[0,1,0],r.rw],['Wall N',[0,W,0],[L,0,0],[0,0,H],[0,-1,0],r.rw],
+    ['Wall W',[0,0,0],[0,W,0],[0,0,H],[1,0,0],r.rw],['Wall E',[L,0,0],[0,W,0],[0,0,H],[-1,0,0],r.rw]];
+  let Atot=0,sRhoPhi=0,sRhoA=0,phiD=0;
+  const surf=defs.map(([name,o,a,b,n,rho])=>{
+    const la=Math.hypot(a[0],a[1],a[2]),lb=Math.hypot(b[0],b[1],b[2]),na=Math.max(1,Math.ceil(la/cs)),nb=Math.max(1,Math.ceil(lb/cs)),A=la*lb,ca=A/(na*nb),cells=[];
+    const pt=(u,v)=>[o[0]+a[0]*u+b[0]*v,o[1]+a[1]*u+b[1]*v,o[2]+a[2]*u+b[2]*v];
+    let phi=0;
+    for(let j=0;j<nb;j++)for(let i=0;i<na;i++){const u0=i/na,u1=(i+1)/na,v0=j/nb,v1=(j+1)/nb,c=pt((u0+u1)/2,(v0+v1)/2),E=Ed(c,n);phi+=E*ca;cells.push({q:[pt(u0,v0),pt(u1,v0),pt(u1,v1),pt(u0,v1)],E})}
+    Atot+=A;sRhoPhi+=rho/100*phi;sRhoA+=rho/100*A;phiD+=phi;
+    return{name,n,rho:rho/100,A,cells,quad:[o,[o[0]+a[0],o[1]+a[1],o[2]+a[2]],[o[0]+a[0]+b[0],o[1]+a[1]+b[1],o[2]+a[2]+b[2]],[o[0]+b[0],o[1]+b[1],o[2]+b[2]]]};
+  });
+  const Eind=sRhoPhi/Math.max(1e-6,Atot-sRhoA),mf=r.mf;
+  surf.forEach(sf=>sf.cells.forEach(c=>c.T=(c.E+Eind)*mf));
+  const m=Math.min(r.margin,Math.min(L,W)/2-.1),x0=m,y0=m,wl=L-2*m,wd=W-2*m,csw=clamp(Math.max(L,W)/100,.05,.15)*(lums.length>40?2:1),wnx=Math.max(1,Math.ceil(wl/csw)),wny=Math.max(1,Math.ceil(wd/csw)),dx=wl/wnx,dy=wd/wny,cells=[];
+  for(let j=0;j<wny;j++)for(let i=0;i<wnx;i++){const x=x0+dx*(i+.5),y=y0+dy*(j+.5);cells.push({x,y,q:[[x0+dx*i,y0+dy*j,r.wp],[x0+dx*(i+1),y0+dy*j,r.wp],[x0+dx*(i+1),y0+dy*(j+1),r.wp],[x0+dx*i,y0+dy*(j+1),r.wp]],T:(Ed([x,y,r.wp],[0,0,1])+Eind)*mf})}
+  const vals=cells.map(c=>c.T),Em=vals.reduce((a,b)=>a+b,0)/vals.length,Emin=Math.min(...vals),Emax=Math.max(...vals);
+  const nl=lums.length,watts=nl*S.watts;
+  const rows=[['Work plane',vals.reduce((a,b)=>a+b,0)/vals.length,Emin,Emax,null]];
+  const grp=(name,list)=>{let sa=0,sA=0,mn=1e12,mx=0;for(const sf of list){const ca=sf.A/sf.cells.length;for(const c of sf.cells){sa+=c.T*ca;mn=Math.min(mn,c.T);mx=Math.max(mx,c.T)}sA+=sf.A}return[name,sa/sA,mn,mx,list[0].rho]};
+  rows.push(grp('Floor',[surf[0]]),grp('Ceiling',[surf[1]]),grp('Walls',surf.slice(2)));
+  rows[0][4]=null;
+  return{L,W,H,lums,oz,surf,Eind,mf,m,wp:{cells,wnx,wny,x0,y0,wl,wd},Em,Emin,Emax,U0:Emin/Em,nl,watts,wm2:watts/(L*W),lm:nl*cur.A.flux,fluxOK:phiD/(nl*cur.A.flux),rows,Ed,
+    Ewp:(x,y)=>(Ed([x,y,r.wp],[0,0,1])+Eind)*mf};
+}
+function ramp01(t){const[r,g,b]=ramp(clamp(t,0,1));return[r,g,b]}
+function buildRoomScene(){
+  const R=ROOM;if(!R){R3.scene=null;return}
+  const r=S.room,polys=[],all=r.show==='all';
+  let Mx=R.Emax;if(all)for(const sf of R.surf)for(const c of sf.cells)Mx=Math.max(Mx,c.T);
+  R3.Mx=Mx;
+  for(const sf of R.surf){polys.push({v:sf.quad,n:sf.n,col:[210,214,218],a:all?0:.14,edge:true,shell:true});
+    if(all)for(const c of sf.cells)polys.push({v:c.q,n:sf.n,col:ramp01(Math.pow(c.T/Mx,.55)),a:.95,edge:false,shell:true})}
+  if(!all)for(const c of R.wp.cells)polys.push({v:c.q,n:[0,0,1],col:ramp01(Math.pow(c.T/Mx,.55)),a:.95,edge:false,shell:true});
+  LOD=.28;const fx=buildFixture();LOD=1;
+  const o=fx.origin,rot=r.rot*RAD,cr=Math.cos(rot),sr=Math.sin(rot);
+  const body=fx.q.filter(q=>q.tag!=='rod');
+  const I=cur.info;
+  for(const c of R.lums){
+    const tr=v=>{const x=v[0]-o[0],y=v[1]-o[1];return[c[0]+x*cr-y*sr,c[1]+x*sr+y*cr,c[2]+v[2]-o[2]]};
+    for(const q of body)polys.push({v:q.v.map(tr),col:q.c,a:q.a,edge:q.edge,tag:q.tag});
+    if(S.tab==='dec'&&I&&I.pts&&r.rod>0){const zt=c[2]+(I.zt-o[2]);polys.push(...q3revolve([{z:zt,r:.004},{z:zt+r.rod,r:.004}],6,[70,70,70],1,'rod',false).map(q=>({v:q.v.map(v=>[v[0]+c[0],v[1]+c[1],v[2]]),col:q.c,a:1,edge:false,tag:'rod'})))}
+  }
+  R3.scene={polys,T:[R.L/2,R.W/2,R.H/2],Rb:.5*Math.hypot(R.L,R.W,R.H)};
+}
+function drawRoom3D(){
+  const cv=$('room3d');if(!cv)return;
+  const w=Math.max(260,cv.parentElement.clientWidth),h=Math.min(440,Math.round(w*.8)),c=setupCanvas(cv,w,h);
+  c.fillStyle=css('--plot-bg');c.fillRect(0,0,w,h);
+  const sc=R3.scene;if(!sc)return;
+  const dist=sc.Rb*1.9*R3.zoom,y=R3.yaw,p=R3.pitch,T=sc.T;
+  const eye=[T[0]+dist*Math.cos(p)*Math.cos(y),T[1]+dist*Math.cos(p)*Math.sin(y),T[2]+dist*Math.sin(p)];
+  const fwd=V3.norm(V3.sub(T,eye)),right=V3.norm(V3.cross(fwd,[0,0,1])),up=V3.cross(right,fwd),f=1.15*Math.min(w,h),cx=w/2,cy=h/2;
+  const list=[];
+  for(const q of sc.polys){
+    if(q.n){const m=q.v[0],ce=[(m[0]+q.v[2][0])/2,(m[1]+q.v[2][1])/2,(m[2]+q.v[2][2])/2];if(V3.dot(q.n,V3.sub(eye,ce))<=0)continue}
+    const pv=[];let ok=true,dsum=0;
+    for(const v of q.v){const rr=V3.sub(v,eye),zc=V3.dot(rr,fwd);if(zc<=.05){ok=false;break}pv.push([cx+f*V3.dot(rr,right)/zc,cy-f*V3.dot(rr,up)/zc]);dsum+=zc}
+    if(ok)list.push({q,pv,d:dsum/pv.length-(q.shell?.0:0)})
+  }
+  list.sort((a,b)=>b.d-a.d);
+  const ink=css('--ink'),head=[-fwd[0],-fwd[1],-fwd[2]];
+  for(const it of list){
+    const q=it.q;let col=q.col;
+    if(!q.shell&&q.tag!=='src'){const n=V3.norm(V3.cross(V3.sub(q.v[1],q.v[0]),V3.sub(q.v[2],q.v[0]))),lum=.5+.5*Math.abs(V3.dot(n,head));col=col.map(x=>x*(.6+.4*lum))}
+    c.beginPath();c.moveTo(it.pv[0][0],it.pv[0][1]);for(let i=1;i<it.pv.length;i++)c.lineTo(it.pv[i][0],it.pv[i][1]);c.closePath();
+    if(q.a>0){c.globalAlpha=q.a;c.fillStyle=`rgb(${col[0]|0},${col[1]|0},${col[2]|0})`;c.fill();c.globalAlpha=1}
+    if(q.edge){c.strokeStyle=q.shell?css('--mute'):ink;c.globalAlpha=q.shell?.7:.2;c.lineWidth=q.shell?1:.5;c.stroke();c.globalAlpha=1}
+    else if(q.a>0.5){c.strokeStyle=`rgb(${col[0]|0},${col[1]|0},${col[2]|0})`;c.lineWidth=.8;c.stroke()}
+  }
+}
+let roomPlanCtx=null;
+function drawRoomPlan(){
+  const cv=$('roomPlan'),R=ROOM;if(!cv)return;
+  const W0=Math.max(260,cv.parentElement.clientWidth),ml=34,mr=8,mt=8,mb=24,s=Math.min((W0-ml-mr)/R.L,420/R.W),pw=R.L*s,ph=R.W*s,H0=ph+mt+mb;
+  const c=setupCanvas(cv,W0,H0),px0=ml+((W0-ml-mr)-pw)/2;
+  c.fillStyle=css('--plot-bg');c.fillRect(0,0,W0,H0);
+  const wp=R.wp,GW=Math.max(30,Math.min(110,Math.round(pw/4))),GH=Math.max(20,Math.round(GW*ph/pw));
+  const g=[];let Emax=0;
+  for(let j=0;j<GH;j++){const row=new Float32Array(GW);for(let i=0;i<GW;i++){const x=(i+.5)/GW*R.L,y=(1-(j+.5)/GH)*R.W;const inside=x>=wp.x0&&x<=wp.x0+wp.wl&&y>=wp.y0&&y<=wp.y0+wp.wd;const e=inside?R.Ewp(x,y):-1;row[i]=e;if(e>Emax)Emax=e}g.push(row)}
+  const cands=[];for(let e=0;e<=5;e++)for(const m of[1,2,5])cands.push(m*Math.pow(10,e));
+  let lv=cands.filter(x=>x>=.2*Emax&&x<=.98*Emax);if(lv.length>6)lv=lv.filter((_,i)=>i%Math.ceil(lv.length/6)===0);
+  if(lv.length<2)lv=[.5,.75,.9].map(f=>+(f*Emax).toPrecision(2));
+  const off=fieldImage(g,GW,GH,outRes(pw),outRes(ph),Emax,lv);
+  c.imageSmoothingEnabled=true;c.drawImage(off,px0,mt,pw,ph);
+  c.strokeStyle=css('--ink');c.lineWidth=2;c.strokeRect(px0,mt,pw,ph);
+  // value grid
+  const cellpx=Math.min(wp.wl/wp.wnx,wp.wd/wp.wny)*s,k=Math.max(1,Math.ceil(46/cellpx));
+  c.font='10px '+css('--f-mono');c.textAlign='center';c.textBaseline='middle';
+  for(let j=Math.floor(k/2);j<wp.wny;j+=k)for(let i=Math.floor(k/2);i<wp.wnx;i+=k){const cl=wp.cells[j*wp.wnx+i],t=Math.pow(cl.T/Emax,.55);c.fillStyle=t>.5?'#000':'#fff';c.fillText(String(Math.round(cl.T)),px0+cl.x*s,mt+(R.W-cl.y)*s)}
+  // luminaires
+  const dm=cur.dm||{w:.1},rad=Math.max(4,(dm.w||.1)*s/2);
+  for(const l of R.lums){const x=px0+l[0]*s,y=mt+(R.W-l[1])*s;c.strokeStyle='#fff';c.lineWidth=3;c.beginPath();c.arc(x,y,rad,0,2*Math.PI);c.stroke();c.strokeStyle='#000';c.lineWidth=1.2;c.beginPath();c.arc(x,y,rad,0,2*Math.PI);c.moveTo(x-rad,y);c.lineTo(x+rad,y);c.moveTo(x,y-rad);c.lineTo(x,y+rad);c.stroke()}
+  // axes
+  c.fillStyle=css('--mute');c.font='11px '+css('--f-mono');c.textAlign='center';c.textBaseline='top';
+  const st=Math.max(1,Math.round(R.L/6));for(let v=0;v<=R.L+1e-9;v+=st){const x=px0+v*s;c.fillText(nstr(v,0),x,mt+ph+5)}
+  c.textAlign='right';c.textBaseline='middle';const sy=Math.max(1,Math.round(R.W/5));for(let v=0;v<=R.W+1e-9;v+=sy)c.fillText(nstr(v,0),px0-5,mt+(R.W-v)*s);
+  roomPlanCtx={px0,mt,s,R};
+  $('rLegMin').textContent=kfmt(Math.min(R3.Mx||0,R.Emin))+' lx';$('rLegMax').textContent=kfmt(R3.Mx||R.Emax)+' lx';
+  $('rLeg').style.background='linear-gradient(to right,'+[0,.1,.2,.3,.4,.5,.6,.7,.8,.9,1].map(t=>{const[r,gg,b]=ramp01(t);return`rgb(${r|0},${gg|0},${b|0}) ${t*100}%`}).join(',')+')';
+}
+function roomHover(ev){
+  const k=roomPlanCtx;if(!k)return;const r=$('roomPlan').getBoundingClientRect(),t=ev.touches?ev.touches[0]:ev;
+  const x=(t.clientX-r.left-k.px0)/k.s,y=k.R.W-(t.clientY-r.top-k.mt)/k.s;
+  if(x<0||x>k.R.L||y<0||y>k.R.W)return;
+  const wp=k.R.wp;if(x<wp.x0||x>wp.x0+wp.wl||y<wp.y0||y>wp.y0+wp.wd){$('roomHov').textContent=`x ${x.toFixed(2)} m, y ${y.toFixed(2)} m, inside the work plane margin`;return}
+  $('roomHov').textContent=`x ${x.toFixed(2)} m, y ${y.toFixed(2)} m → ${kfmt(k.R.Ewp(x,y))} lx`;
+}
+function renderRoomResults(){
+  const R=ROOM,m=$('roomMetrics'),tb=$('roomTab');
+  if(!R){m.innerHTML='';tb.textContent='';return}
+  const req=S.room.req,ok=req>0?R.Em>=req:null;
+  const it=[['Em (work plane)',kfmt(R.Em)+' lx',req>0?(ok?'meets ':'below ')+req+' lx':'no requirement set'],['Emin / Emax',`${kfmt(R.Emin)} / ${kfmt(R.Emax)}`,'lx'],['Uniformity U0',nstr(R.U0,2),'Emin / Em'],
+    ['Luminaires',String(R.nl),`${nstr(R.lm,0)} lm installed`],['Power density',nstr(R.wm2,1)+' W/m²',`${nstr(R.watts,0)} W total`],['Interreflected',kfmt(R.Eind*R.mf)+' lx','average, all surfaces']];
+  m.innerHTML=it.map(i=>`<div class="m"><i>${i[0]}</i><b>${i[1]}</b><em>${i[2]}</em></div>`).join('');
+  tb.innerHTML='<tr><th>Surface</th><th>ρ</th><th>Em lx</th><th>Emin lx</th><th>Emax lx</th></tr>'+R.rows.map(r=>`<tr><td>${r[0]}</td><td>${r[4]==null?'–':nstr(r[4]*100,0)+' %'}</td><td>${kfmt(r[1])}</td><td>${kfmt(r[2])}</td><td>${kfmt(r[3])}</td></tr>`).join('');
+  $('roomNote').textContent=`flux balance ${nstr(R.fluxOK*100,0)} % · MF ${S.room.mf}`;
+}
+function drawRoom(){drawRoom3D();drawRoomPlan()}
+(function(){
+  const cv=$('room3d');
+  cv.addEventListener('pointerdown',e=>{R3.drag={x:e.clientX,y:e.clientY};cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing'});
+  cv.addEventListener('pointermove',e=>{if(!R3.drag)return;R3.yaw-=(e.clientX-R3.drag.x)*.008;R3.pitch=clamp(R3.pitch+(e.clientY-R3.drag.y)*.008,-1.45,1.45);R3.drag={x:e.clientX,y:e.clientY};drawRoom3D()});
+  const end=()=>{R3.drag=null;cv.style.cursor='grab'};cv.addEventListener('pointerup',end);cv.addEventListener('pointercancel',end);
+  cv.addEventListener('wheel',e=>{e.preventDefault();R3.zoom=clamp(R3.zoom*Math.exp(e.deltaY*.001),.3,3);drawRoom3D()},{passive:false});
+  $('rReset').addEventListener('click',()=>{R3.yaw=-.8;R3.pitch=.5;R3.zoom=1;drawRoom3D()});
+  document.querySelectorAll('#roomShow button').forEach(b=>b.addEventListener('click',()=>{S.room.show=b.dataset.show;document.querySelectorAll('#roomShow button').forEach(x=>x.setAttribute('aria-pressed',x===b));schedule()}));
+  const pl=$('roomPlan');pl.addEventListener('mousemove',roomHover);pl.addEventListener('touchmove',roomHover,{passive:true});
+})();
+
+
+/* ---------------- simple start tiles ---------------- */
+const TILES=[
+ ['spec','From a spec sheet','Paste text or a screenshot'],
+ ['down','Downlight','Recessed or surface'],
+ ['pend','Decorative pendant','Shade around a light source'],
+ ['lin','Linear / strip','Long, wide in one plane'],
+ ['wall','Wall washer','Tilted, one-sided'],
+ ['ies','Open an IES file','Check or convert one']
+];
+(function(){
+  const t=$('tiles');
+  TILES.forEach(([id,l,sub])=>{const b=document.createElement('button');b.className='tile';b.dataset.tile=id;b.setAttribute('aria-pressed','false');b.innerHTML=`<b>${l}</b><span>${sub}</span>`;t.appendChild(b)});
+  t.addEventListener('click',e=>{
+    const b=e.target.closest('.tile');if(!b)return;const id=b.dataset.tile;S.start=id;
+    const rs=()=>{S.dist.dip=35;S.dist.tilt=0;S.dist.azim=0;S.dist.cutoff=90;S.dist.up=0;S.dist.lock=true};
+    if(id==='spec'){$('specCard').open=true;$('specCard').scrollIntoView({block:'nearest',behavior:'smooth'})}
+    else if(id==='down'){S.tab='dist';rs();Object.assign(S.dist,{profile:'gauss',beamA:60,beamB:60});S.name='Downlight';S.shape='circle';S.dimW=100;S.dimH=0;S.lumens=1000;S.watts=10;S.eff=100}
+    else if(id==='pend'){S.tab='dec';Object.assign(S.dec,DEC.drum,{preset:'drum',dlShare:0,ribs:0,perf:0,src:'line',srcLen:80,srcPos:50});S.name='Pendant';S.lumens=800;S.watts=10;S.eff=80}
+    else if(id==='lin'){S.tab='dist';rs();Object.assign(S.dist,PRESETS.dist[4][1]);S.name='Linear light';S.shape='rect';S.dimW=60;S.dimL=1200;S.dimH=0;S.lumens=2400;S.watts=24;S.eff=100}
+    else if(id==='wall'){S.tab='dist';rs();Object.assign(S.dist,PRESETS.dist[3][1]);S.name='Wall washer';S.shape='rect';S.dimW=120;S.dimL=120;S.dimH=0;S.lumens=1200;S.watts=15;S.eff=80}
+    else if(id==='ies'){S.tab='imp';S.name='Imported luminaire'}
+    schedule();
+  });
+  $('advToggle').addEventListener('change',e=>{S.adv=e.target.checked;schedule()});
+  document.querySelectorAll('details.more').forEach(d=>d.addEventListener('toggle',()=>{if(d.open)setTimeout(drawPlots,30)}));
+})();
+
+/* ---------------- boot ---------------- */
+$('decCustom').value=S.dec.custom;
+update();
+</script>
+
+</body>
+</html>
