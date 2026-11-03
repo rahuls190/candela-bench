@@ -246,7 +246,7 @@ const S={
   dist:{profile:'gauss',beamA:40,beamB:40,lock:true,dip:35,tilt:0,azim:0,cutoff:90,up:0},
   opt:{type:'reflector',D:15,A:70,H:50,recess:10,trim:70,q:1.25,spill:5},
   dec:{mode:'linear',preset:'barrel',H:280,dt:150,db:150,bulge:30,mat:'opal',T:55,topOpen:false,botOpen:false,
-       src:'line',srcLen:80,srcPos:50,perf:0,ribs:0,duty:35,dlShare:0,dlBeam:100,R:42,Ts:0,Rs:0,inner:'same',quality:'trace',rays:150,ledLm:0,custom:'0, 60\n40, 85\n120, 95\n220, 80\n260, 45'},
+       src:'line',srcLen:80,srcPos:50,perf:0,ribs:0,duty:35,dlShare:0,dlBeam:100,mesh:null,meshUnit:'mm',meshUp:'z',meshFlip:false,srcMode:'single',srcList:'',ringN:6,ringR:60,pat:null,patRep:4,patRepV:1,patInv:false,R:42,Ts:0,Rs:0,inner:'same',quality:'trace',rays:150,ledLm:0,custom:'0, 60\n40, 85\n120, 95\n220, 80\n260, 45'},
   imp:{text:'',data:null,res:null,fname:''},
   mh:3,plane:'floor',wx:1.0,planeAng:0,spec:null,cal:{measLm:0,lux:0,dist:1,ang:0,matched:false},
   room:{L:6,W:4,H:2.8,wp:.75,margin:.5,rod:.6,nx:2,ny:2,rot:0,rc:70,rw:50,rf:20,mf:.8,req:300,show:'wp'}
@@ -279,29 +279,46 @@ const F={
   {k:'opt.spill',t:'rng',l:'Stray light / spill',min:0,max:30,step:1,u:'%',show:s=>s.opt.type!=='bare'}
  ],
  dec:[
-  {k:'dec.H',t:'rng',l:'Height',min:30,max:1200,step:5,u:'mm'},
-  {k:'dec.dt',t:'rng',l:'Top Ø',min:0,max:800,step:5,u:'mm'},
-  {k:'dec.db',t:'rng',l:'Bottom Ø',min:0,max:800,step:5,u:'mm'},
+  {k:'dec.H',t:'rng',l:'Height',min:30,max:1200,step:5,u:'mm',show:s=>s.dec.mode!=='mesh'},
+  {k:'dec.dt',t:'rng',l:'Top Ø',min:0,max:800,step:5,u:'mm',show:s=>s.dec.mode!=='mesh'},
+  {k:'dec.db',t:'rng',l:'Bottom Ø',min:0,max:800,step:5,u:'mm',show:s=>s.dec.mode!=='mesh'},
   {k:'dec.bulge',t:'rng',l:'Belly (+) / waist (−), radial',min:-150,max:150,step:1,u:'mm',show:s=>s.dec.mode==='linear'},
+  {g:'Or import a mesh (OBJ / STL)'},
+  {html:'<div class="fld"><input type="file" id="meshFile" accept=".obj,.stl"></div><div class="note" id="meshNote">Thin-shell surface, light axis is Z. Up to 60 000 triangles.</div>'},
+  {k:'dec.meshUnit',t:'sel',l:'Mesh units',o:[['mm','mm'],['cm','cm'],['m','m'],['in','inch']],show:s=>s.dec.mode==='mesh'},
+  {k:'dec.meshUp',t:'sel',l:'Up axis in the file',o:[['z','Z up'],['y','Y up']],show:s=>s.dec.mode==='mesh'},
+  {k:'dec.meshFlip',t:'chk',l:'Turn upside down',show:s=>s.dec.mode==='mesh'},
+  {html:'<div class="pre"><button data-act="meshClear">Back to parametric shape</button></div>',show:s=>s.dec.mode==='mesh'},
   {g:'Shade material'},
   {k:'dec.mat',t:'sel',l:'Material',o:Object.entries(MATS).map(([k,v])=>[k,v[0]]).concat([['custom','Custom']])},
   {k:'dec.T',t:'rng',l:'Diffuse transmittance',min:0,max:95,step:.5,u:'%'},
   {k:'dec.R',t:'rng',l:'Diffuse reflectance',min:0,max:95,step:1,u:'%',adv:true},
   {k:'dec.Ts',t:'rng',l:'Clear (straight-through) share',min:0,max:99,step:1,u:'%',adv:true},
   {k:'dec.Rs',t:'rng',l:'Mirror reflectance',min:0,max:99,step:1,u:'%',adv:true},
-  {k:'dec.topOpen',t:'chk',l:'Top open'},
-  {k:'dec.botOpen',t:'chk',l:'Bottom open'},
+  {k:'dec.topOpen',t:'chk',l:'Top open',show:s=>s.dec.mode!=='mesh'},
+  {k:'dec.botOpen',t:'chk',l:'Bottom open',show:s=>s.dec.mode!=='mesh'},
   {k:'dec.inner',t:'sel',l:'Inside finish',o:[['same','Same as shade'],['white','White paint'],['gold','Gold / brass'],['mirror','Mirror'],['black','Black']]},
   {html:'<div class="note" id="traceNote"></div>'},
   {g:'Light source inside'},
-  {k:'dec.src',t:'sel',l:'Source',o:[['line','Vertical LED filament / tube'],['ball','Point / small ball LED']]},
-  {k:'dec.srcLen',t:'rng',l:'Filament length',min:0,max:600,step:5,u:'mm',show:s=>s.dec.src==='line'},
-  {k:'dec.srcPos',t:'rng',l:'Position along height',min:0,max:100,step:1,u:'%'},
+  {k:'dec.srcMode',t:'sel',l:'Layout',o:[['single','One filament or LED on the axis'],['list','Several LEDs, positions listed']]},
+  {k:'dec.src',t:'sel',l:'Source',o:[['line','Vertical LED filament / tube'],['ball','Point / small ball LED']],show:s=>s.dec.srcMode==='single'},
+  {k:'dec.srcLen',t:'rng',l:'Filament length',min:0,max:600,step:5,u:'mm',show:s=>s.dec.srcMode==='single'&&s.dec.src==='line'},
+  {k:'dec.srcPos',t:'rng',l:'Position along height',min:0,max:100,step:1,u:'%',show:s=>s.dec.srcMode==='single'},
+  {html:'<div class="fld"><div class="fl"><label for="srcList">LED positions: x, y, z (mm, z from the shade bottom), weight</label></div><textarea id="srcList" spellcheck="false" placeholder="0, 0, 120, 1"></textarea></div>',show:s=>s.dec.srcMode==='list'},
+  {k:'dec.ringN',t:'num',l:'Ring: number of LEDs',min:2,max:48,step:1,u:'',show:s=>s.dec.srcMode==='list'},
+  {k:'dec.ringR',t:'num',l:'Ring: radius',min:0,max:600,step:1,u:'mm',show:s=>s.dec.srcMode==='list'},
+  {html:'<div class="pre"><button data-act="ringFill">Fill list with a ring at mid-height</button></div>',show:s=>s.dec.srcMode==='list'},
   {k:'dec.ledLm',t:'num',l:'LED lumens inside the shade (0 = use output below)',min:0,max:50000,step:10,u:'lm'},
   {g:'Pattern'},
   {k:'dec.perf',t:'rng',l:'Perforation (open area)',min:0,max:60,step:1,u:'%'},
   {k:'dec.ribs',t:'rng',l:'Ribs / slats around',min:0,max:36,step:1,u:''},
   {k:'dec.duty',t:'rng',l:'Rib width (share of pitch)',min:5,max:90,step:1,u:'%',show:s=>s.dec.ribs>0},
+  {g:'Pattern image (cut-outs)'},
+  {html:'<div class="fld"><input type="file" id="patFile" accept="image/*"></div><canvas id="patThumb" width="96" height="96" style="width:96px;height:96px;border:1px solid var(--line);display:none"></canvas><div class="note" id="patNote">Dark = material, light = open. Black and white artwork works best.</div>'},
+  {k:'dec.patRep',t:'rng',l:'Repeats around',min:1,max:48,step:1,u:'×',show:s=>!!s.dec.pat},
+  {k:'dec.patRepV',t:'rng',l:'Repeats along height',min:1,max:12,step:1,u:'×',show:s=>!!s.dec.pat},
+  {k:'dec.patInv',t:'chk',l:'Swap: dark = open',show:s=>!!s.dec.pat},
+  {html:'<div class="pre"><button data-act="patClear">Remove pattern</button></div>',show:s=>!!s.dec.pat},
   {g:'Downlight module in the bottom'},
   {k:'dec.dlShare',t:'rng',l:'Share of output',min:0,max:100,step:1,u:'%'},
   {k:'dec.dlBeam',t:'rng',l:'Downlight beam angle',min:15,max:150,step:1,u:'°',show:s=>s.dec.dlShare>0},
@@ -372,7 +389,7 @@ function pushInputs(root){
   root.querySelectorAll('.fld,.grp').forEach(w=>{if(w._f)w.hidden=(w._f.adv&&!S.adv)||(w._f.show?!w._f.show(S):false)});
 }
 
-const ADVK=new Set(['dist.profile','dist.lock','dist.beamB','dist.dip','dist.tilt','dist.azim','dist.cutoff','dist.up','opt.recess','opt.trim','opt.q','opt.spill','dec.bulge','dec.T','dec.topOpen','dec.botOpen','dec.src','dec.srcLen','dec.srcPos','dec.R','dec.Ts','dec.Rs','dec.quality','dec.rays','dec.perf','dec.ribs','dec.duty','dec.dlShare','dec.dlBeam','manu','cat','eff','cri','shape','dimW','dimL','dimH','basis','vstep','hstep']);
+const ADVK=new Set(['dist.profile','dist.lock','dist.beamB','dist.dip','dist.tilt','dist.azim','dist.cutoff','dist.up','opt.recess','opt.trim','opt.q','opt.spill','dec.bulge','dec.T','dec.topOpen','dec.botOpen','dec.src','dec.srcLen','dec.srcPos','dec.srcMode','dec.R','dec.Ts','dec.Rs','dec.quality','dec.rays','dec.perf','dec.ribs','dec.duty','dec.dlShare','dec.dlBeam','manu','cat','eff','cri','shape','dimW','dimL','dimH','basis','vstep','hstep']);
 const ADVG=new Set(['Aim and shielding','Optical quality','Light source inside','Pattern','Downlight module in the bottom']);
 ['dist','opt','dec','out'].forEach(k=>F[k].forEach(f=>{if(f.k&&ADVK.has(f.k))f.adv=true;if(f.g&&ADVG.has(f.g))f.adv=true}));
 /* ---------------- panels ---------------- */
@@ -551,6 +568,7 @@ function genOpt(ax){
 }
 /* ---------------- model: decorative lamp ---------------- */
 function profilePts(P){
+  if(P.mode==='mesh'&&P.mesh){const m=meshX(P);return{pts:m.pts,ok:true}}
   const N=36,pts=[],H=P.H/1000,rt=P.dt/2000,rb=P.db/2000,bu=P.bulge/1000,Rm=Math.max(rt,rb);
   if(P.mode==='custom'){
     const out=[];P.custom.split(/\n/).forEach(l=>{const m=l.split(/[,;\s]+/).filter(Boolean).map(Number);if(m.length>=2&&isFinite(m[0])&&isFinite(m[1]))out.push({z:m[0]/1000,r:Math.max(0,m[1])/1000})});
@@ -574,7 +592,7 @@ function genDecQuick(ax){
   const rmax=Math.max(...pts.map(p=>p.r));
   const nS=P.src==='line'&&P.srcLen>0?7:1,zs=[],zc=zb+(zt-zb)*P.srcPos/100,len=P.srcLen/1000;
   for(let k=0;k<nS;k++)zs.push(zc+(nS>1?(k/(nS-1)-.5)*len:0));
-  const T0=P.T/100,pf=P.perf/100,M=96;
+  const T0=P.T/100,pm=P.pat?(P.patInv?1-P.pat.mean:P.pat.mean):0,pf=1-(1-P.perf/100)*(1-pm),M=96;
   const Tphi=phi=>{
     let t=T0;
     if(P.ribs>0){const f=((phi/(2*Math.PI))*P.ribs+.5)%1;if(Math.abs(f-.5)<P.duty/200)t=.02}
@@ -626,7 +644,9 @@ function genDecQuick(ax){
 function genDec(ax){
   const P=S.dec,om=cellOmega(ax),q=genDecQuick(ax);
   let rel=q.rel;const info=q.info;info.lor=fluxGrid(rel,om);info.traced=false;info.pending=false;
-  if(P.quality==='trace'){
+  const forced=!!(P.mode==='mesh'&&P.mesh)||P.srcMode==='list'||!!P.pat;
+  info.srcPts=decSources(P,info.zb,info.zt);info.meshT=P.mode==='mesh'&&P.mesh?meshX(P).tr:null;
+  if(P.quality==='trace'||forced){
     const key=trKey(ax);
     if(TR.key===key&&TR.res){const r=TR.res;rel=r.rel;Object.assign(info,{lor:r.lor,lorLo:r.lorLo,lorHi:r.lorHi,lorNee:r.lorNee,rays:r.N,traced:true})}
     else{info.pending=true;ensureTrace(key,ax)}
@@ -644,9 +664,29 @@ const TR={key:'',runKey:'',res:null,job:0,prog:0,timer:0,busy:false};
 const TB=48,TMIN=1e-7,TOFF=3e-6;
 function mulberry(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 function applyMat(key){const m=MATS[key];if(!m)return;const D=S.dec;D.mat=key;D.T=m[1];D.R=m[2];D.Ts=m[3];D.Rs=m[4];if(key==='perf')D.perf=Math.max(D.perf,18)}
-function trKey(ax){const D=S.dec;return JSON.stringify([D.mode,D.H,D.dt,D.db,D.bulge,D.mode==='custom'?D.custom:0,D.T,D.R,D.Ts,D.Rs,D.inner,D.perf,D.ribs,D.duty,D.topOpen,D.botOpen,D.src,D.srcLen,D.srcPos,+D.rays,ax.vs,ax.hs,S.cal.matched?1:0])}
+function trKey(ax){const D=S.dec;return JSON.stringify([D.mode,D.H,D.dt,D.db,D.bulge,D.mode==='custom'?D.custom:0,D.T,D.R,D.Ts,D.Rs,D.inner,D.perf,D.ribs,D.duty,D.topOpen,D.botOpen,D.src,D.srcLen,D.srcPos,+D.rays,ax.vs,ax.hs,S.cal.matched?1:0,D.srcMode,D.srcMode==='list'?D.srcList:0,D.mode==='mesh'&&D.mesh?[D.mesh.id,D.meshUnit,D.meshUp,D.meshFlip]:0,D.pat?[D.pat.id,D.patRep,D.patRepV,D.patInv]:0])}
+function trQ(){
+  const D=S.dec,pts=profilePts(D).pts,zb=pts[0].z,zt=pts[pts.length-1].z,mx=D.mode==='mesh'&&D.mesh?meshX(D):null;
+  const srcs=decSources(D,zb,zt),off=srcs.some(p=>Math.hypot(p.x,p.y)>5e-4);
+  const axi=D.ribs===0&&!mx&&!D.pat&&!off;
+  return Object.assign({},D,{pts,zb,zt,mx,srcs,axi,fold:(D.ribs>0&&!mx&&!D.pat&&!off)?D.ribs:1,unc:S.cal.matched?.05:.15});
+}
+function decAxi(D){if(D.mode==='mesh'&&D.mesh)return false;if(D.ribs>0||D.pat)return false;if(D.srcMode==='list'){const{pts}=profilePts(D);return !decSources(D,pts[0].z,pts[pts.length-1].z).some(p=>Math.hypot(p.x,p.y)>5e-4)}return true}
+function decSources(P,zb,zt){
+  if(P.srcMode==='list'){
+    const out=[];String(P.srcList||'').split(/\n/).forEach(l=>{const m=l.split(/[,;\s]+/).filter(Boolean).map(Number);if(m.length>=3&&m.slice(0,3).every(isFinite))out.push({x:m[0]/1000,y:m[1]/1000,z:zb+m[2]/1000,w:m.length>3&&isFinite(m[3])&&m[3]>0?m[3]:1})});
+    if(out.length){const t=out.reduce((a,b)=>a+b.w,0);out.forEach(o=>o.w/=t);return out}
+  }
+  const nS=P.src==='line'&&P.srcLen>0?7:1,zc=zb+(zt-zb)*P.srcPos/100,len=P.srcLen/1000,out=[];
+  for(let k=0;k<nS;k++)out.push({x:0,y:0,z:zc+(nS>1?(k/(nS-1)-.5)*len:0),w:1/nS});
+  return out;
+}
 function trGeom(Q){
-  const pts=Q.pts,segs=[],zb=pts[0].z,zt=pts[pts.length-1].z,rB=pts[0].r,rT=pts[pts.length-1].r;
+  const src=Q.srcs,sc={x:0,y:0,z:0};src.forEach(p=>{sc.x+=p.x*p.w;sc.y+=p.y*p.w;sc.z+=p.z*p.w});
+  const cdf=[];let a=0;src.forEach(p=>{a+=p.w;cdf.push(a)});
+  const G={src,cdf,zs:src.map(p=>p.z),segs:[],mesh:null,n:0};
+  if(Q.mx){G.mesh=meshGeom(Q.mx.tr,sc);G.n=Q.mx.n;return G}
+  const pts=Q.pts,segs=G.segs,zb=pts[0].z,zt=pts[pts.length-1].z,rB=pts[0].r,rT=pts[pts.length-1].r;
   const openT=Q.topOpen&&rT>.002,openB=Q.botOpen&&rB>.002;
   const ring=(z,r,nz)=>{const n=Math.max(1,Math.ceil(r/.01));for(let i=0;i<n;i++)segs.push({t:1,z,ri:r*i/n,ro:r*(i+1)/n,nz,rm:r*(i+.5)/n,zm:z})};
   if(!openB&&rB>.002)ring(zb,rB,-1);
@@ -660,20 +700,127 @@ function trGeom(Q){
     }
   }
   if(!openT&&rT>.002)ring(zt,rT,1);
-  const nS=Q.src==='line'&&Q.srcLen>0?7:1,zs=[],zc=zb+(zt-zb)*Q.srcPos/100,len=Q.srcLen/1000;
-  for(let k=0;k<nS;k++)zs.push(zc+(nS>1?(k/(nS-1)-.5)*len:0));
-  return{segs,zs};
+  G.n=segs.length;
+  return G;
+}
+/* ---- mesh: parse, transform, BVH ---- */
+function parseMesh(buf,name){
+  const u8=new Uint8Array(buf);let raw=null;
+  if(u8.length>84){const dv=new DataView(buf),n=dv.getUint32(80,true);
+    if(84+50*n===u8.length&&n>0){raw=new Float32Array(n*9);for(let i=0;i<n;i++)for(let k=0;k<9;k++)raw[i*9+k]=dv.getFloat32(84+50*i+12+4*k,true)}}
+  if(!raw){
+    const txt=new TextDecoder().decode(u8),out=[];
+    if(/^\s*solid[\s\S]*facet/i.test(txt.slice(0,2000))&&/vertex/.test(txt)){
+      const re=/vertex\s+(\S+)\s+(\S+)\s+(\S+)/g;let m;while((m=re.exec(txt)))out.push(+m[1],+m[2],+m[3]);
+    }else{
+      const V=[];
+      for(const ln of txt.split(/\r?\n/)){
+        if(ln[0]==='v'&&ln[1]===' '){const p=ln.trim().split(/\s+/);V.push([+p[1],+p[2],+p[3]])}
+        else if(ln[0]==='f'&&ln[1]===' '){
+          const ix=ln.trim().split(/\s+/).slice(1).map(t=>{let k=parseInt(t.split('/')[0]);return k<0?V.length+k:k-1});
+          for(let k=1;k<ix.length-1;k++)for(const q of[ix[0],ix[k],ix[k+1]]){const v=V[q];if(!v)continue;out.push(v[0],v[1],v[2])}
+        }
+      }
+    }
+    if(out.length<9||out.some(x=>!isFinite(x)))return{err:'No triangles found. Use an ASCII or binary STL, or an OBJ with faces.'};
+    raw=Float32Array.from(out.slice(0,Math.floor(out.length/9)*9));
+  }
+  const n=raw.length/9;if(n>60000)return{err:`${n} triangles is too many. Decimate the mesh to under 60 000 in your CAD tool.`};
+  return{mesh:{id:Date.now()+Math.random(),raw,n,name}};
+}
+let MXC={key:'',data:null};
+function meshX(P){
+  const m=P.mesh,key=[m.id,P.meshUnit,P.meshUp,+P.meshFlip].join('|');if(MXC.key===key)return MXC.data;
+  const f={mm:.001,cm:.01,m:1,in:.0254}[P.meshUnit]||.001,raw=m.raw,n=m.n,tr=new Float64Array(raw.length);
+  let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9,z0=1e9,z1=-1e9;
+  for(let i=0;i<raw.length;i+=3){
+    let x=raw[i]*f,y=raw[i+1]*f,z=raw[i+2]*f;
+    if(P.meshUp==='y'){const t=y;y=-z;z=t}
+    if(P.meshFlip)z=-z;
+    tr[i]=x;tr[i+1]=y;tr[i+2]=z;
+    x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y);z0=Math.min(z0,z);z1=Math.max(z1,z);
+  }
+  const cx=(x0+x1)/2,cy=(y0+y1)/2;
+  for(let i=0;i<tr.length;i+=3){tr[i]-=cx;tr[i+1]-=cy;tr[i+2]-=z0}
+  const H=z1-z0,K=24,rm=new Float64Array(K+1);
+  for(let i=0;i<tr.length;i+=3){const k=Math.min(K,Math.max(0,Math.round(tr[i+2]/(H||1)*K)));rm[k]=Math.max(rm[k],Math.hypot(tr[i],tr[i+1]))}
+  for(let k=0;k<=K;k++)if(rm[k]<1e-4)rm[k]=k?rm[k-1]:1e-3;
+  const pts=[];for(let k=0;k<=K;k++)pts.push({z:H*k/K,r:rm[k]});
+  MXC={key,data:{tr,n,pts,H}};return MXC.data;
+}
+function meshGeom(tr,sc){
+  const n=tr.length/9,E1=new Float64Array(3*n),E2=new Float64Array(3*n),nx=new Float64Array(n),ny=new Float64Array(n),nz=new Float64Array(n),cen=new Float64Array(3*n);
+  for(let i=0;i<n;i++){
+    const o=9*i,e1x=tr[o+3]-tr[o],e1y=tr[o+4]-tr[o+1],e1z=tr[o+5]-tr[o+2],e2x=tr[o+6]-tr[o],e2y=tr[o+7]-tr[o+1],e2z=tr[o+8]-tr[o+2];
+    E1[3*i]=e1x;E1[3*i+1]=e1y;E1[3*i+2]=e1z;E2[3*i]=e2x;E2[3*i+1]=e2y;E2[3*i+2]=e2z;
+    let ax=e1y*e2z-e1z*e2y,ay=e1z*e2x-e1x*e2z,az=e1x*e2y-e1y*e2x;const l=Math.hypot(ax,ay,az)||1;ax/=l;ay/=l;az/=l;
+    const cx=(tr[o]+tr[o+3]+tr[o+6])/3,cy=(tr[o+1]+tr[o+4]+tr[o+7])/3,cz=(tr[o+2]+tr[o+5]+tr[o+8])/3;
+    cen[3*i]=cx;cen[3*i+1]=cy;cen[3*i+2]=cz;
+    if(ax*(cx-sc.x)+ay*(cy-sc.y)+az*(cz-sc.z)<0){ax=-ax;ay=-ay;az=-az}
+    nx[i]=ax;ny[i]=ay;nz[i]=az;
+  }
+  const idx=new Int32Array(n);for(let i=0;i<n;i++)idx[i]=i;
+  const bb=[],L=[],R=[],ST=[],CT=[];
+  const build=(s,e)=>{
+    const k=L.length;L.push(-1);R.push(-1);ST.push(s);CT.push(0);
+    let lx=1e9,ly=1e9,lz=1e9,hx=-1e9,hy=-1e9,hz=-1e9,cl=[1e9,1e9,1e9],ch=[-1e9,-1e9,-1e9];
+    for(let q=s;q<e;q++){const i=idx[q],o=9*i;
+      for(let v=0;v<3;v++){lx=Math.min(lx,tr[o+3*v]);hx=Math.max(hx,tr[o+3*v]);ly=Math.min(ly,tr[o+3*v+1]);hy=Math.max(hy,tr[o+3*v+1]);lz=Math.min(lz,tr[o+3*v+2]);hz=Math.max(hz,tr[o+3*v+2])}
+      for(let a=0;a<3;a++){cl[a]=Math.min(cl[a],cen[3*i+a]);ch[a]=Math.max(ch[a],cen[3*i+a])}}
+    bb.push(lx-1e-9,ly-1e-9,lz-1e-9,hx+1e-9,hy+1e-9,hz+1e-9);
+    if(e-s<=4){CT[k]=e-s;return k}
+    let ax=0;if(ch[1]-cl[1]>ch[ax]-cl[ax])ax=1;if(ch[2]-cl[2]>ch[ax]-cl[ax])ax=2;
+    idx.subarray(s,e).sort((p,q)=>cen[3*p+ax]-cen[3*q+ax]);
+    const m=(s+e)>>1;L[k]=build(s,m);R[k]=build(m,e);return k;
+  };
+  build(0,n);
+  return{n,tr,E1,E2,nx,ny,nz,cen,idx,bb:Float64Array.from(bb),L:Int32Array.from(L),R:Int32Array.from(R),st:Int32Array.from(ST),ct:Int32Array.from(CT),stack:new Int32Array(128)};
+}
+function trHitMesh(m,ox,oy,oz,dx,dy,dz){
+  const st=m.stack,bb=m.bb,tr=m.tr;let sp=0,best=1e9,bi=-1;
+  const ix=1/(dx||1e-30),iy=1/(dy||1e-30),iz=1/(dz||1e-30);
+  st[sp++]=0;
+  while(sp>0){
+    const k=st[--sp],b=k*6;
+    let t0=(bb[b]-ox)*ix,t1=(bb[b+3]-ox)*ix,tn=Math.min(t0,t1),tf=Math.max(t0,t1);
+    t0=(bb[b+1]-oy)*iy;t1=(bb[b+4]-oy)*iy;tn=Math.max(tn,Math.min(t0,t1));tf=Math.min(tf,Math.max(t0,t1));
+    t0=(bb[b+2]-oz)*iz;t1=(bb[b+5]-oz)*iz;tn=Math.max(tn,Math.min(t0,t1));tf=Math.min(tf,Math.max(t0,t1));
+    if(tf<tn||tf<TMIN||tn>best)continue;
+    const c=m.ct[k];
+    if(c>0){
+      for(let q=m.st[k],qe=q+c;q<qe;q++){
+        const i=m.idx[q],i3=3*i,e1x=m.E1[i3],e1y=m.E1[i3+1],e1z=m.E1[i3+2],e2x=m.E2[i3],e2y=m.E2[i3+1],e2z=m.E2[i3+2];
+        const px=dy*e2z-dz*e2y,py=dz*e2x-dx*e2z,pz=dx*e2y-dy*e2x,det=e1x*px+e1y*py+e1z*pz;
+        if(det>-1e-16&&det<1e-16)continue;
+        const inv=1/det,o9=9*i,tx=ox-tr[o9],ty=oy-tr[o9+1],tz=oz-tr[o9+2],u=(tx*px+ty*py+tz*pz)*inv;
+        if(u<0||u>1)continue;
+        const qx=ty*e1z-tz*e1y,qy=tz*e1x-tx*e1z,qz=tx*e1y-ty*e1x,v=(dx*qx+dy*qy+dz*qz)*inv;
+        if(v<0||u+v>1)continue;
+        const t=(e2x*qx+e2y*qy+e2z*qz)*inv;
+        if(t>TMIN&&t<best){best=t;bi=i}
+      }
+    }else{st[sp++]=m.L[k];st[sp++]=m.R[k]}
+  }
+  TH.t=best;TH.i=bi;
 }
 const MT=new Float64Array(4),TH={t:0,i:-1};
-function trMat(Q,phi,inside,o){
+function patAt(Q,phi,z){
+  const p=Q.pat,u=((phi/(2*Math.PI))*Q.patRep%1+1)%1,v=Math.min(.9999,Math.max(0,(z-Q.zb)/((Q.zt-Q.zb)||1)))*Q.patRepV%1;
+  const fx=u*p.w-.5,fy=(1-v)*p.h-.5,x0=Math.floor(fx),y0=Math.floor(fy),tx=fx-x0,ty=fy-y0,g=(x,y)=>p.d[Math.min(p.h-1,Math.max(0,y))*p.w+((x%p.w)+p.w)%p.w];
+  const m=((g(x0,y0)*(1-tx)+g(x0+1,y0)*tx)*(1-ty)+(g(x0,y0+1)*(1-tx)+g(x0+1,y0+1)*tx)*ty)/255;
+  return Q.patInv?1-m:m;
+}
+function trMat(Q,phi,z,inside,o){
   let Td=Q.T/100,Ts=Q.Ts/100,Rd=Q.R/100,Rs=Q.Rs/100;
   if(Q.ribs>0){const f=((phi/(2*Math.PI))*Q.ribs+.5)%1;if(Math.abs(f-.5)<Q.duty/200){Td=.02;Ts=0}}
   if(inside&&Q.inner!=='same'){const fi=FIN[Q.inner];Td=0;Ts=0;Rd=fi[0];Rs=fi[1]}
-  const p=Q.perf/100;if(p>0){Td*=1-p;Rd*=1-p;Rs*=1-p;Ts=Ts*(1-p)+p}
+  let p=Q.perf/100;if(Q.pat)p=1-(1-p)*(1-patAt(Q,phi,z));
+  if(p>0){Td*=1-p;Rd*=1-p;Rs*=1-p;Ts=Ts*(1-p)+p}
   const s=Td+Ts+Rd+Rs;if(s>.999){const k=.999/s;Td*=k;Ts*=k;Rd*=k;Rs*=k}
   o[0]=Td;o[1]=Ts;o[2]=Rd;o[3]=Rs;
 }
 function trHit(G,ox,oy,oz,dx,dy,dz){
+  if(G.mesh){trHitMesh(G.mesh,ox,oy,oz,dx,dy,dz);return}
   let best=1e9,bi=-1;const sg=G.segs;
   for(let i=0;i<sg.length;i++){
     const s=sg[i];
@@ -691,29 +838,36 @@ function trHit(G,ox,oy,oz,dx,dy,dz){
   }
   TH.t=best;TH.i=bi;
 }
-function trNorm(s,x,y){if(s.t===1)return[0,0,s.nz];const l=Math.hypot(x,y)||1;return[s.nr*x/l,s.nr*y/l,s.nz]}
+const NN=new Float64Array(3);
+function trNorm(G,i,x,y){
+  if(G.mesh){const m=G.mesh;NN[0]=m.nx[i];NN[1]=m.ny[i];NN[2]=m.nz[i];return NN}
+  const s=G.segs[i];if(s.t===1){NN[0]=0;NN[1]=0;NN[2]=s.nz;return NN}
+  const l=Math.hypot(x,y)||1;NN[0]=s.nr*x/l;NN[1]=s.nr*y/l;NN[2]=s.nz;return NN;
+}
+function trNB(Q){return Q.mx||Q.axi?1:TB}
 function trVis(G,Q,ox,oy,oz,dx,dy,dz){ // straight-through transmittance
   let T=1;
   for(let it=0;it<8;it++){
     trHit(G,ox,oy,oz,dx,dy,dz);if(TH.i<0)return T;
-    const t=TH.t,hx=ox+t*dx,hy=oy+t*dy,hz=oz+t*dz,n=trNorm(G.segs[TH.i],hx,hy);
+    const t=TH.t,hx=ox+t*dx,hy=oy+t*dy,hz=oz+t*dz,n=trNorm(G,TH.i,hx,hy);
     const ph=(Math.atan2(hy,hx)+2*Math.PI)%(2*Math.PI);
-    trMat(Q,ph,dx*n[0]+dy*n[1]+dz*n[2]>0,MT);T*=MT[1];if(T<.002)return 0;
+    trMat(Q,ph,hz,dx*n[0]+dy*n[1]+dz*n[2]>0,MT);T*=MT[1];if(T<.002)return 0;
     ox=hx+dx*TOFF;oy=hy+dy*TOFF;oz=hz+dz*TOFF;
   }
   return T;
 }
 function trWalkChunk(G,Q,st,n,tal,hist,ax){
-  const rng=st.rng,nz_=G.zs.length,axi=Q.ribs===0,NB=axi?1:TB,nv=ax?ax.v.length:0,nh=ax?ax.h.length:0,TP=2*Math.PI;
+  const rng=st.rng,axi=Q.axi,NB=trNB(Q),nv=ax?ax.v.length:0,nh=ax?ax.h.length:0,TP=2*Math.PI;
   for(let w=0;w<n;w++){
-    let ox=0,oy=0,oz=G.zs[(st.k++)%nz_];
+    const ug=(st.k++*0.6180339887498949)%1;let sI=0;while(sI<G.cdf.length-1&&ug>G.cdf[sI])sI++;
+    let ox=G.src[sI].x,oy=G.src[sI].y,oz=G.src[sI].z;
     let dz=2*rng()-1,ph=TP*rng(),sz=Math.sqrt(Math.max(0,1-dz*dz)),dx=sz*Math.cos(ph),dy=sz*Math.sin(ph);
     let diff=false,spec=false,esc=false;
     for(let b=0;b<22;b++){
       trHit(G,ox,oy,oz,dx,dy,dz);if(TH.i<0){esc=true;break}
-      const si=TH.i,t=TH.t,hx=ox+t*dx,hy=oy+t*dy,hz=oz+t*dz,s=G.segs[si],nn=trNorm(s,hx,hy);
+      const si=TH.i,t=TH.t,hx=ox+t*dx,hy=oy+t*dy,hz=oz+t*dz,nn=trNorm(G,si,hx,hy);
       const phi=(Math.atan2(hy,hx)+TP)%TP,dn=dx*nn[0]+dy*nn[1]+dz*nn[2],inside=dn>0;
-      trMat(Q,phi,inside,MT);
+      trMat(Q,phi,hz,inside,MT);
       let u=rng();
       if(u<MT[1]){ox=hx+dx*TOFF;oy=hy+dy*TOFF;oz=hz+dz*TOFF;continue}
       u-=MT[1];
@@ -752,14 +906,31 @@ function trBlur(h,nh,nv,axi){
   return o;
 }
 function* trFar(G,Q,ax,tal,hist,N){
-  const nv=ax.v.length,nh=ax.h.length,om=cellOmega(ax),axi=Q.ribs===0,NB=axi?1:TB,TP=2*Math.PI,VQ=24;
+  const nv=ax.v.length,nh=ax.h.length,om=cellOmega(ax),axi=Q.axi,NB=trNB(Q),TP=2*Math.PI,VQ=24;
   const P={x:[],y:[],z:[],nx:[],ny:[],nz:[],w:[]};
   const addP=(s,sgn,phi,c)=>{
     const cp=Math.cos(phi),sp=Math.sin(phi);P.x.push(s.rm*cp);P.y.push(s.rm*sp);P.z.push(s.zm);
     if(s.t===1){P.nx.push(0);P.ny.push(0);P.nz.push(sgn*s.nz)}else{P.nx.push(sgn*s.nr*cp);P.ny.push(sgn*s.nr*sp);P.nz.push(sgn*s.nz)}
     P.w.push(c/N/Math.PI);
   };
-  for(let i=0;i<G.segs.length;i++)for(let side=0;side<2;side++)for(let b=0;b<NB;b++){
+  if(G.mesh){
+    const m=G.mesh,n=G.n;let lo=[1e9,1e9,1e9],hi=[-1e9,-1e9,-1e9];
+    for(let i=0;i<n;i++)for(let a=0;a<3;a++){lo[a]=Math.min(lo[a],m.cen[3*i+a]);hi[a]=Math.max(hi[a],m.cen[3*i+a])}
+    const cell=Math.max(hi[0]-lo[0],hi[1]-lo[1],hi[2]-lo[2],1e-3)/14,map=new Map();
+    for(let i=0;i<n;i++)for(let side=0;side<2;side++){
+      const c=tal[i*2+side];if(!c)continue;const sgn=side?-1:1;
+      const vx=Math.floor((m.cen[3*i]-lo[0])/cell),vy=Math.floor((m.cen[3*i+1]-lo[1])/cell),vz=Math.floor((m.cen[3*i+2]-lo[2])/cell);
+      const q=(a)=>Math.max(-1,Math.min(1,Math.round(a*1.2)))+1;
+      const key=(((vx*32+vy)*32+vz)*27)+q(sgn*m.nx[i])*9+q(sgn*m.ny[i])*3+q(sgn*m.nz[i]);
+      let e=map.get(key);if(!e){e={c:0,nx:0,ny:0,nz:0,best:-1,bc:0};map.set(key,e)}
+      e.c+=c;e.nx+=sgn*m.nx[i]*c;e.ny+=sgn*m.ny[i]*c;e.nz+=sgn*m.nz[i]*c;if(c>e.bc){e.bc=c;e.best=i;e.bs=sgn}
+    }
+    for(const e of map.values()){
+      const i=e.best,l=Math.hypot(e.nx,e.ny,e.nz)||1,sgn=e.bs;
+      P.x.push(m.cen[3*i]+sgn*m.nx[i]*TOFF);P.y.push(m.cen[3*i+1]+sgn*m.ny[i]*TOFF);P.z.push(m.cen[3*i+2]+sgn*m.nz[i]*TOFF);
+      P.nx.push(e.nx/l);P.ny.push(e.ny/l);P.nz.push(e.nz/l);P.w.push(e.c/N/Math.PI);
+    }
+  }else for(let i=0;i<G.segs.length;i++)for(let side=0;side<2;side++)for(let b=0;b<NB;b++){
     const c=tal[(i*2+side)*NB+b];if(!c)continue;const sgn=side?-1:1;
     if(axi)for(let q=0;q<VQ;q++)addP(G.segs[i],sgn,(q+.5)/VQ*TP,c/VQ);else addP(G.segs[i],sgn,(b+.5)/NB*TP,c);
   }
@@ -767,7 +938,7 @@ function* trFar(G,Q,ax,tal,hist,N){
   // columns to compute
   const rep=new Array(nh);
   if(axi){for(let j=0;j<nh;j++)rep[j]=0}
-  else{const per=360/Q.ribs;for(let j=0;j<nh;j++){const m=((ax.h[j]%per)+per)%per;let k=Math.round(m/ax.hs);if(Math.abs(k*ax.hs-m)>1e-6)k=j;else if(k*ax.hs>=per-1e-6)k=0;rep[j]=k}}
+  else{const per=360/Q.fold;for(let j=0;j<nh;j++){const m=((ax.h[j]%per)+per)%per;let k=Math.round(m/ax.hs);if(Math.abs(k*ax.hs-m)>1e-6)k=j;else if(k*ax.hs>=per-1e-6)k=0;rep[j]=k}}
   const canon=[...new Set(rep)].sort((a,b)=>a-b);
   const hb=trBlur(hist,nh,nv,axi),rel=new Array(nh);
   let done=0;
@@ -776,11 +947,11 @@ function* trFar(G,Q,ax,tal,hist,N){
     for(let i=0;i<nv;i++){
       const g=ax.v[i]*RAD,sg=Math.sin(g),dx=sg*Math.cos(C),dy=sg*Math.sin(C),dz=-Math.cos(g);
       let I=0;
-      for(const z0 of G.zs)I+=trVis(G,Q,0,0,z0,dx,dy,dz);
-      I/=G.zs.length*4*Math.PI;
+      for(const sp of G.src)I+=sp.w*trVis(G,Q,sp.x,sp.y,sp.z,dx,dy,dz);
+      I/=4*Math.PI;
       for(let p=0;p<np;p++){
         const d=P.nx[p]*dx+P.ny[p]*dy+P.nz[p]*dz;if(d<=0)continue;
-        I+=P.w[p]*d*trVis(G,Q,P.x[p]+P.nx[p]*TOFF,P.y[p]+P.ny[p]*TOFF,P.z[p]+P.nz[p]*TOFF,dx,dy,dz);
+        I+=P.w[p]*d*trVis(G,Q,P.x[p]+(G.mesh?0:P.nx[p]*TOFF),P.y[p]+(G.mesh?0:P.ny[p]*TOFF),P.z[p]+(G.mesh?0:P.nz[p]*TOFF),dx,dy,dz);
       }
       I+=axi?hb[i]/(N*om[i]*nh):hb[j*nv+i]/(N*om[i]);
       col[i]=I;
@@ -796,8 +967,8 @@ function* trLor(Q,N,seed){
   return st.esc/N;
 }
 function* trMain(Q,ax){
-  const G=trGeom(Q),N=(+Q.rays)*1000,st={rng:mulberry(12345),esc:0,k:0},axi=Q.ribs===0,NB=axi?1:TB,nv=ax.v.length,nh=ax.h.length;
-  const tal=new Float64Array(G.segs.length*2*NB),hist=new Float64Array(axi?nv:nh*nv);
+  const G=trGeom(Q),N=(+Q.rays)*1000,st={rng:mulberry(12345),esc:0,k:0},axi=Q.axi,NB=trNB(Q),nv=ax.v.length,nh=ax.h.length;
+  const tal=new Float64Array(G.n*2*NB),hist=new Float64Array(axi?nv:nh*nv);
   let done=0;
   while(done<N){const n=Math.min(4000,N-done);trWalkChunk(G,Q,st,n,tal,hist,ax);done+=n;yield .5*done/N*.9}
   const rel=yield* trFar(G,Q,ax,tal,hist,N);
@@ -825,7 +996,7 @@ function ensureTrace(key,ax){
   TR.runKey=key;clearTimeout(TR.timer);const job=++TR.job;TR.busy=true;TR.prog=0;
   TR.timer=setTimeout(()=>{
     if(job!==TR.job)return;
-    const Q=Object.assign({},S.dec,{pts:profilePts(S.dec).pts,unc:S.cal.matched?.05:.15});
+    const Q=trQ();
     const axc={v:ax.v.slice(),h:ax.h.slice(),vs:ax.vs,hs:ax.hs};
     slice(trMain(Q,axc),()=>job===TR.job,p=>{TR.prog=p;noteTrace()},res=>{TR.key=key;TR.res=res;TR.busy=false;schedule()});
   },250);
@@ -836,7 +1007,7 @@ function calMsg(t,err){const e=$('calNote');if(e){e.textContent=t;e.style.color=
 function calLm(){
   const D=S.dec,c=S.cal;
   if(!(D.ledLm>0)||!(c.measLm>0)){calMsg('Enter the LED lumens inside the shade and the measured luminaire lumens first.',true);return}
-  const target=c.measLm/D.ledLm,Q0=Object.assign({},D,{pts:profilePts(D).pts}),job=++CAL;
+  const target=c.measLm/D.ledLm,Q0=trQ(),job=++CAL;
   calMsg('Matching… 0 %');
   const gen=(function*(){
     const f=T=>Object.assign({},Q0,{T});
@@ -995,7 +1166,7 @@ function autoSteps(){
     else b=100;
     vs=b<12?1:b<30?2.5:5;
   }
-  if(hs===null)hs=(S.tab==='dec'&&S.dec.ribs>0)?5:15;
+  if(hs===null)hs=S.tab==='dec'?(S.dec.ribs>0?5:decAxi(S.dec)?15:10):15;
   return{vs,hs};
 }
 function compute(){
@@ -1141,7 +1312,8 @@ function lampSvg(){
   s+=I.openT?`<line x1="${X(-rt)}" y1="${zt}" x2="${X(rt)}" y2="${zt}" stroke="var(--mute)" stroke-dasharray="3 3"/>`:`<line x1="${X(-rt)}" y1="${zt}" x2="${X(rt)}" y2="${zt}" stroke="var(--ink)" stroke-width="2"/>`;
   s+=I.openB?`<line x1="${X(-rb)}" y1="${zb}" x2="${X(rb)}" y2="${zb}" stroke="var(--mute)" stroke-dasharray="3 3"/>`:`<line x1="${X(-rb)}" y1="${zb}" x2="${X(rb)}" y2="${zb}" stroke="var(--ink)" stroke-width="2"/>`;
   const zs=I.zs,za=Y(zs[0]),zz=Y(zs[zs.length-1]);
-  s+=zs.length>1?`<line x1="${cx}" y1="${za}" x2="${cx}" y2="${zz}" stroke="var(--curve-a)" stroke-width="4" stroke-linecap="round"/>`:`<circle cx="${cx}" cy="${za}" r="4" fill="var(--curve-a)"/>`;
+  if(S.dec.srcMode==='list'&&I.srcPts.length)I.srcPts.forEach(p=>{s+=`<circle cx="${X(p.x)}" cy="${Y(p.z)}" r="3.5" fill="var(--curve-a)"/>`});
+  else s+=zs.length>1?`<line x1="${cx}" y1="${za}" x2="${cx}" y2="${zz}" stroke="var(--curve-a)" stroke-width="4" stroke-linecap="round"/>`:`<circle cx="${cx}" cy="${za}" r="4" fill="var(--curve-a)"/>`;
   s+=`<text x="6" y="14">H ${nstr((I.zt-I.zb)*1000,0)} mm</text><text x="${Wd-6}" y="14" text-anchor="end">Ø max ${nstr(I.rmax*2000,0)} mm</text>`;
   svg.innerHTML=s;
 }
@@ -1155,7 +1327,7 @@ function renderDerived(){
     t+=`luminous disk fully visible to γ <b>${nstr(vis,0)}°</b>, hidden from <b>${nstr(hid,0)}°</b> (shielding angle <b>${nstr(90-hid,0)}°</b>)`;
     if(S.opt.type==='reflector'&&G.A/G.D<3)t+=`<br>Exit Ø is under 3× the LED Ø, expect a wide, ragged beam.`;
     od.innerHTML=t}
-  if(S.tab==='dec'&&cur.info&&cur.info.pts){const I=cur.info;cd.innerHTML=`${I.nP} shade patches, ${I.zs.length} source point${I.zs.length>1?'s':''}<br>${S.dec.dlShare>0?`Downlight module carries ${S.dec.dlShare} % of the output.<br>`:''}${S.dec.ribs>0?'Rib pattern makes the file asymmetric, step 5°.':'Axisymmetric, one C plane stored.'}${I.ok?'':'<br><b>Profile needs at least two points with rising z.</b> Showing a drum instead.'}`}
+  if(S.tab==='dec'&&cur.info&&cur.info.pts){const I=cur.info;cd.innerHTML=`${I.nP} shade patches, ${I.zs.length} source point${I.zs.length>1?'s':''}<br>${S.dec.dlShare>0?`Downlight module carries ${S.dec.dlShare} % of the output.<br>`:''}${!decAxi(S.dec)?'Mesh, pattern, ribs or off-axis LEDs make the file asymmetric.':'Axisymmetric, one C plane stored.'}${I.ok?'':'<br><b>Profile needs at least two points with rising z.</b> Showing a drum instead.'}`}
 }
 const bw=b=>b>=355?'omni':nstr(b,0)+'°';
 function renderMetrics(){
@@ -1250,6 +1422,9 @@ document.addEventListener('click',ev=>{
   const b=ev.target.closest('button');if(!b)return;
   if(b.dataset.tab){S.tab=b.dataset.tab;if(S.tab==='dist'&&!S.name)S.name='Downlight';schedule();return}
   if(b.dataset.act==='dpre'){const p=PRESETS.dist[+b.dataset.v][1];Object.assign(S.dist,{dip:35},p);schedule();return}
+  if(b.dataset.act==='meshClear'){Object.assign(S.dec,DEC.barrel,{preset:'barrel'});applyMat(S.dec.mat==='custom'?'opal':S.dec.mat);schedule();return}
+  if(b.dataset.act==='patClear'){S.dec.pat=null;$('patThumb').style.display='none';$('patFile').value='';schedule();return}
+  if(b.dataset.act==='ringFill'){const D=S.dec,{pts}=profilePts(D),zm=Math.round((pts[pts.length-1].z-pts[0].z)*500),L=[];for(let k=0;k<D.ringN;k++){const t=2*Math.PI*k/D.ringN;L.push(`${nstr(D.ringR*Math.cos(t),1)}, ${nstr(D.ringR*Math.sin(t),1)}, ${zm}, 1`)}D.srcList=L.join('\n');$('srcList').value=D.srcList;schedule();return}
   if(b.dataset.act==='calLm'){calLm();return}
   if(b.dataset.act==='calLux'){calLux();return}
   if(b.dataset.act==='cpre'){const key=PRESETS.dec[+b.dataset.v][1];Object.assign(S.dec,DEC[key],{preset:key,dlShare:0});applyMat(DEC[key].mat);S.cal.matched=false;schedule();return}
@@ -1258,6 +1433,29 @@ document.addEventListener('click',ev=>{
   if(b.id==='impLoad'){loadImport($('impText').value,'pasted text');return}
 });
 $('decCustom').addEventListener('input',e=>{S.dec.custom=e.target.value;S.dec.mode='custom';schedule()});
+$('srcList').addEventListener('input',e=>{S.dec.srcList=e.target.value;schedule()});
+$('meshFile').addEventListener('change',async e=>{
+  const f=e.target.files&&e.target.files[0];if(!f)return;const note=$('meshNote');
+  try{const r=parseMesh(await f.arrayBuffer(),f.name);
+    if(r.err){note.textContent=r.err;note.style.color='#b3261e';return}
+    S.dec.mesh=r.mesh;S.dec.mode='mesh';S.dec.preset='mesh';note.style.color='';
+    const m=meshX(S.dec);note.textContent=`${f.name}: ${r.mesh.n} triangles, ${nstr(m.H*1000,0)} mm high. Light source is placed at the shade centre; edit it in "Light source inside".`;
+    S.dec.srcPos=50;schedule();
+  }catch(err){note.textContent='Could not read that file.';note.style.color='#b3261e'}
+});
+$('patFile').addEventListener('change',e=>{
+  const f=e.target.files&&e.target.files[0];if(!f)return;const note=$('patNote'),url=URL.createObjectURL(f),im=new Image();
+  im.onload=()=>{
+    const sc=Math.min(1,256/Math.max(im.width,im.height)),w=Math.max(2,Math.round(im.width*sc)),h=Math.max(2,Math.round(im.height*sc)),c=document.createElement('canvas');c.width=w;c.height=h;
+    const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(im,0,0,w,h);
+    const px=x.getImageData(0,0,w,h).data,d=new Uint8Array(w*h);let sum=0;
+    for(let i=0;i<w*h;i++){d[i]=Math.round(.299*px[4*i]+.587*px[4*i+1]+.114*px[4*i+2]);sum+=d[i]}
+    S.dec.pat={id:Date.now(),w,h,d,mean:sum/(w*h*255),name:f.name};
+    const t=$('patThumb');t.style.display='block';const tc=t.getContext('2d');tc.clearRect(0,0,96,96);tc.drawImage(c,0,0,96,96);
+    note.textContent=`${f.name}: ${nstr(S.dec.pat.mean*100,0)} % open on average (dark = material).`;URL.revokeObjectURL(url);schedule();
+  };
+  im.onerror=()=>{note.textContent='Could not read that image.'};im.src=url;
+});
 $('impScale').addEventListener('change',e=>{S.rescale=e.target.checked;schedule()});
 $('impFile').addEventListener('change',e=>{
   const f=e.target.files&&e.target.files[0];if(!f)return;
@@ -1488,11 +1686,14 @@ function buildFixture(){
   let origin=[0,0,0];
   if(S.tab==='dec'&&cur.info&&cur.info.pts){
     const I=cur.info,pts=I.pts,rT=pts[pts.length-1].r,rB=pts[0].r;
+    if(I.meshT){const tt=I.meshT,n=tt.length/9,st=Math.max(1,Math.ceil(n/6000));for(let i=0;i<n;i+=st){const o=9*i;q.push({v:[[tt[o],tt[o+1],tt[o+2]],[tt[o+3],tt[o+4],tt[o+5]],[tt[o+6],tt[o+7],tt[o+8]]],c:M,a:.4,tag:'shade',edge:false})}}
+    else{
     q.push(...q3revolve(pts,56,M,.4,'shade'));
     if(!I.openT)q.push(...q3disc(rT,I.zt,40,M,.4,'shade'));
-    if(!I.openB)q.push(...q3disc(rB,I.zb,40,M,.4,'shade'));
-    const zs=I.zs;
-    if(zs.length>1)q.push(...q3revolve([{z:zs[0],r:.004},{z:zs[zs.length-1],r:.004}],10,LED,1,'src',false));
+    if(!I.openB)q.push(...q3disc(rB,I.zb,40,M,.4,'shade'));}
+    let zs=I.zs;
+    if(S.dec.srcMode==='list'&&I.srcPts.length){zs=I.srcPts.map(p=>p.z);for(const p of I.srcPts)q.push(...q3sphere(.008,p.z,10,LED,1,'src').map(f=>({...f,v:f.v.map(v=>[v[0]+p.x,v[1]+p.y,v[2]])})))}
+    else if(zs.length>1)q.push(...q3revolve([{z:zs[0],r:.004},{z:zs[zs.length-1],r:.004}],10,LED,1,'src',false));
     else q.push(...q3sphere(.01,zs[0],12,LED,1,'src'));
     if(S.dec.dlShare>0)q.push(...q3disc(rB*.9,I.zb+.004,40,LED,1,'src',false));
     if(rT>.002||true)q.push(...q3revolve([{z:I.zt,r:.003},{z:I.zt+Math.max(.4,(I.zt-I.zb)*.8),r:.003}],8,[70,70,70],1,'rod',false));
@@ -1767,7 +1968,7 @@ const TILES=[
 })();
 
 /* ---------------- boot ---------------- */
-$('decCustom').value=S.dec.custom;
+$('decCustom').value=S.dec.custom;$('srcList').value=S.dec.srcList;
 applyMat(S.dec.mat);
 update();
 </script>
