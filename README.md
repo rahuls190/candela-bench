@@ -30,3 +30,9 @@ The decorative-lamp model now traces rays inside the shade (diffuse and clear tr
 - Surface luminance map of the shade (cd/m2, unwrapped, peak and mean).
 - Comparison board: add variations, overlay polar curves, edit names and quantities, schedule totals (also in the Excel report).
 - Project files: save and reopen the whole session including the board as .json.
+
+## v2.1
+
+- EULUMDAT (.ldt) export.
+- One-page product data sheet (PDF) with a dimension sketch.
+- Lab test brief (PDF): sample, LM-79 conditions, deliverables and a predicted vs measured table.

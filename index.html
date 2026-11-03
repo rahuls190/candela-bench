@@ -125,7 +125,7 @@ svg.lamp text{font:400 10px var(--f-mono);fill:var(--mute)}
 <div class="wrap">
 <header class="top">
   <div>
-    <h1>Candela Bench <small>v2.0</small></h1>
+    <h1>Candela Bench <small>v2.1</small></h1>
     <p class="sub">Pick a fixture, adjust a few settings, check the light, and save an IES file.</p>
   </div>
   <span class="badge">Computed photometry · not LM-79 lab data</span>
@@ -163,6 +163,9 @@ svg.lamp text{font:400 10px var(--f-mono);fill:var(--mute)}
         <button class="btn primary" id="bZip">Save .ies (zip)</button>
         <button class="btn" id="bTxt">Save as .txt</button>
         <button class="btn" id="bPdf">Report (PDF)</button>
+        <button class="btn" id="bSheet">Data sheet (PDF)</button>
+        <button class="btn" id="bBrief">Lab test brief (PDF)</button>
+        <button class="btn" id="bLdt">Save .ldt (zip)</button>
         <button class="btn" id="bXls">Report (Excel)</button>
         <button class="btn" id="bCopy">Copy text</button>
         <span class="toast" id="toast"></span>
@@ -1778,8 +1781,127 @@ $('bProjSave').addEventListener('click',()=>{try{save(fname()+'_project.json',pr
 $('bProjOpen').addEventListener('click',()=>$('projFile').click());
 $('projFile').addEventListener('change',async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;try{projLoad(await f.text());toast('Opened project '+f.name)}catch(err){toast('That is not a Candela Bench project file.')}e.target.value=''});
 
+/* ---------------- phase 4: EULUMDAT, data sheet, lab brief ---------------- */
+function ldtText(){
+  const P=cur.P,a=cur.A,dm=cur.dm||{shape:'point',w:0,l:0,h:0},L='\r\n',f3=x=>(+x.toFixed(3)).toString();
+  const step=P.v.length>1?P.v[1]-P.v[0]:5,vf=P.v.slice();while(vf[vf.length-1]<180-1e-6)vf.push(vf[vf.length-1]+step);
+  let hs=P.h.slice(),rows=P.cd.slice(),isym,mc,dc;const hl=hs[hs.length-1];
+  if(hs.length===1){isym=1;mc=1;dc=0}
+  else if(hl<=90.01){isym=4;mc=hs.length;dc=hs[1]-hs[0]}
+  else if(hl<=180.01){isym=2;mc=hs.length;dc=hs[1]-hs[0]}
+  else{isym=0;hs=hs.slice(0,-1);rows=rows.slice(0,-1);mc=hs.length;dc=hs[1]-hs[0]}
+  const lamp=S.tab==='dec'&&S.dec.ledLm>0?S.dec.ledLm:a.flux,mm=x=>Math.round(x*1000);
+  const rect=dm.shape==='rect',len=rect?Math.max(dm.w,dm.l):dm.w,wid=rect?Math.min(dm.w,dm.l):0,hh=dm.h||0;
+  const g=S.cri>=90?'1A':S.cri>=80?'1B':S.cri>=70?'2A':'3';
+  const o=[S.manu||'Candela Bench',isym===1?'1':'3',String(isym),String(mc),f3(dc),String(vf.length),f3(step),'-',S.name||'Luminaire','-',fname()+'.ldt',new Date().toISOString().slice(0,10)+' Candela Bench (computed)',
+    mm(len),mm(wid),mm(hh),mm(len),mm(wid),mm(hh),mm(hh),mm(hh),mm(hh),f3(a.flux>0?a.down/a.flux*100:0),f3(lamp>0?a.flux/lamp*100:100),'1','0','1','1','LED',f3(lamp),`${S.cct} K`,g,f3(S.watts),...Array(10).fill('0'),...hs.map(f3),...vf.map(f3)];
+  for(const r of rows)for(let i=0;i<vf.length;i++)o.push(f3(i<P.v.length?r[i]*1000/Math.max(lamp,1e-9):0));
+  return o.join(L)+L;
+}
+function pdfKit(){
+  const W=595.28,H=841.89,mg=42,CW=W-2*mg,pages=[],imgs=[];let pg,y;
+  const k={W,H,mg,CW,imgs};
+  k.np=()=>{pg=[];pages.push(pg);y=H-mg};k.np();
+  Object.defineProperty(k,'y',{get:()=>y,set:v=>{y=v}});
+  k.need=h=>{if(y-h<mg+14)k.np()};
+  k.raw=s=>pg.push(s);
+  k.T=(x,yy,t,sz,f)=>pg.push(`BT /${f||'F1'} ${sz} Tf ${x.toFixed(1)} ${yy.toFixed(1)} Td (${pdfEsc(t)}) Tj ET`);
+  k.rule=yy=>pg.push(`0.8 0.8 0.78 RG 0.5 w ${mg} ${yy} m ${W-mg} ${yy} l S`);
+  k.h2=t=>{k.need(34);y-=10;k.T(mg,y,t.toUpperCase(),9,'F2');y-=5;k.rule(y);y-=13};
+  k.wrap=(t,w,sz)=>{const mx=Math.floor(w/(sz*.5)),out=[];let ln='';for(const wd of pdfEnc(t).split(' ')){if((ln+' '+wd).trim().length>mx){out.push(ln);ln=wd}else ln=(ln+' '+wd).trim()}if(ln)out.push(ln);return out};
+  k.para=(t,sz=9,f='F1',x=mg,w=CW)=>{for(const l of k.wrap(t,w,sz)){k.need(sz+3);k.T(x,y,l,sz,f);y-=sz+3.5}};
+  k.img=(cv,x,w,top)=>{if(!cv||!cv.width)return 0;const bg=document.createElement('canvas');bg.width=cv.width;bg.height=cv.height;const bx=bg.getContext('2d');bx.fillStyle=getComputedStyle(cv.closest('.card')||document.body).backgroundColor||'#fff';bx.fillRect(0,0,bg.width,bg.height);bx.drawImage(cv,0,0);
+    const u=atob(bg.toDataURL('image/jpeg',.92).split(',')[1]),a=new Uint8Array(u.length);for(let i=0;i<u.length;i++)a[i]=u.charCodeAt(i);
+    const h=w*bg.height/bg.width,id=imgs.length;imgs.push({a,w:bg.width,h:bg.height});pg.push(`q ${w.toFixed(1)} 0 0 ${h.toFixed(1)} ${x.toFixed(1)} ${(top-h).toFixed(1)} cm /Im${id} Do Q`);return h};
+  k.mono=(rows,widths,sz=8)=>{rows.forEach((r,ri)=>{k.need(sz+4);let x=mg;r.forEach((c,ci)=>{k.T(x,y,String(c),sz,ri===0?'F4':'F3');x+=widths[ci]*sz*.6});y-=sz+3.5})};
+  k.kv=rows=>{const half=Math.ceil(rows.length/2),y0=y;let y1=y0,y2=y0;rows.forEach((r,i)=>{const col=i<half?0:1,x=mg+col*CW/2,yy=col?y2:y1,ls=k.wrap(r[1],CW/2-96,8.5);k.T(x,yy-10,r[0],8,'F2');ls.forEach((l,j)=>k.T(x+90,yy-10-j*10.5,l,8.5,'F1'));const d=Math.max(1,ls.length)*10.5+5;if(col)y2-=d;else y1-=d});y=Math.min(y1,y2)-4};
+  k.finish=foot=>{
+    const chunks=[],offs=[];let len=0;
+    const put=x=>{const u=typeof x==='string'?Uint8Array.from(x,c=>c.charCodeAt(0)&255):x;chunks.push(u);len+=u.length};
+    const obj=(n,b)=>{offs[n]=len;put(`${n} 0 obj\n${b}\nendobj\n`)};
+    put('%PDF-1.4\n');const np=pages.length,fx=7,ib=fx+2*np+1,tot=ib+imgs.length;
+    obj(1,'<< /Type /Catalog /Pages 2 0 R >>');obj(2,`<< /Type /Pages /Count ${np} /Kids [${pages.map((_,i)=>`${fx+1+2*i} 0 R`).join(' ')}] >>`);
+    ['Helvetica','Helvetica-Bold','Courier','Courier-Bold'].forEach((f,i)=>obj(3+i,`<< /Type /Font /Subtype /Type1 /BaseFont /${f} /Encoding /WinAnsiEncoding >>`));obj(7,'<< >>');
+    const xo=imgs.map((_,i)=>`/Im${i} ${ib+i} 0 R`).join(' ');
+    pages.forEach((ops,i)=>{const pn=fx+1+2*i,cn=pn+1,st=ops.join('\n')+`\nBT /F1 7 Tf ${mg} 24 Td (${pdfEsc(foot+'  |  page '+(i+1)+' of '+np)}) Tj ET`;
+      obj(pn,`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Contents ${cn} 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R >> /XObject << ${xo} >> >> >>`);obj(cn,`<< /Length ${st.length} >>\nstream\n${st}\nendstream`)});
+    imgs.forEach((j,i)=>{offs[ib+i]=len;put(`${ib+i} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${j.w} /Height ${j.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${j.a.length} >>\nstream\n`);put(j.a);put('\nendstream\nendobj\n')});
+    const xr=len;put(`xref\n0 ${tot}\n0000000000 65535 f \n`+Array.from({length:tot-1},(_,q)=>String(offs[q+1]).padStart(10,'0')+' 00000 n \n').join('')+`trailer\n<< /Size ${tot} /Root 1 0 R >>\nstartxref\n${xr}\n%%EOF\n`);
+    return new Blob(chunks,{type:'application/pdf'});
+  };
+  return k;
+}
+function pdfDrawing(k,x0,top,w,h){
+  // vector dimension sketch of the luminaire
+  const inf=cur.info,dm=cur.dm||{shape:'point',w:0,l:0,h:0};let pts=null,zb=0,zt=0,rmax=0;
+  if(S.tab==='dec'&&inf&&inf.pts){pts=inf.pts;zb=inf.zb;zt=inf.zt;rmax=inf.rmax}
+  else{const w2=Math.max(dm.w,.02)/2,hh=Math.max(dm.h,.015);pts=[{z:0,r:w2},{z:hh,r:w2}];zb=0;zt=hh;rmax=w2}
+  const span=Math.max(zt-zb,2*rmax)||1,sc=(Math.min(w,h)-40)/span,cx=x0+w/2,by=top-h+20;
+  const X=r=>cx+r*sc,Y=z=>by+(z-zb)*sc;
+  const L=pts.map(p=>`${X(p.r).toFixed(1)} ${Y(p.z).toFixed(1)}`),R=pts.map(p=>`${X(-p.r).toFixed(1)} ${Y(p.z).toFixed(1)}`).reverse();
+  const path=L.map((s,i)=>s+(i?' l':' m')).join(' ')+' '+R.map(s=>s+' l').join(' ')+' h';
+  k.raw(`0.97 0.91 0.85 rg 0.2 0.2 0.2 RG 1.2 w ${path} B`);
+  if(S.tab==='dec'&&inf&&inf.srcPts)inf.srcPts.slice(0,24).forEach(p=>k.raw(`0.8 0.3 0.1 rg ${(X(p.x)-2.5).toFixed(1)} ${(Y(p.z)-2.5).toFixed(1)} 5 5 re f`));
+  // dimensions
+  const dx=X(rmax)+10;k.raw(`0.4 0.4 0.4 RG 0.6 w ${dx.toFixed(1)} ${Y(zb).toFixed(1)} m ${dx.toFixed(1)} ${Y(zt).toFixed(1)} l S`);
+  k.T(dx+4,(Y(zb)+Y(zt))/2,nstr((zt-zb)*1000,0)+' mm',8,'F1');
+  const dy=Y(zb)-10;k.raw(`${X(-rmax).toFixed(1)} ${dy.toFixed(1)} m ${X(rmax).toFixed(1)} ${dy.toFixed(1)} l S`);
+  k.T(cx-24,dy-10,'D '+nstr(rmax*2000,0)+' mm',8,'F1');
+}
+function pdfSheet(){
+  const d=reportData(),k=pdfKit(),a=cur.A;
+  k.T(k.mg,k.y-6,'LUMINAIRE DATA SHEET',9,'F2');k.y-=34;k.T(k.mg,k.y,S.name||'Luminaire',24,'F2');k.y-=16;
+  k.T(k.mg,k.y,[S.manu,S.cat].filter(Boolean).join('  |  ')||'Photometric data from Candela Bench',9,'F1');k.y-=10;k.rule(k.y);k.y-=10;
+  const top=k.y,hw=k.CW/2-8;
+  pdfDrawing(k,k.mg,top,hw,230);
+  const h1=k.img($('polar'),k.mg+k.CW/2+8,hw,top);k.y=top-Math.max(230,h1)-4;
+  k.T(k.mg,k.y,'Dimensions',7.5,'F1');k.T(k.mg+k.CW/2+8,k.y,'Light distribution, C0 and C90 planes (cd)',7.5,'F1');k.y-=8;
+  k.h2('Technical data');k.kv(d.kv);
+  k.h2('Illuminance on axis');
+  k.mono([['Distance','Peak lux','Dia 50% C0','Dia 50% C90'],...d.ax.slice(0,6).map(r=>[r[0]+' m',kfmt(r[1]),r[2]+(r[2]==='-'?'':' m'),r[3]+(r[3]==='-'?'':' m')])],[14,14,16,16],8.5);
+  k.h2('Notes');
+  k.para('Photometric values are computed by Candela Bench from the design, they are not LM-79 laboratory measurements. Confirm with a goniophotometer test of a physical sample before publishing or specifying. Data tolerance for a typical decorative shade model is about +/-10 % on flux.',8.5);
+  k.para(`Files available: IES (LM-63-2002) and EULUMDAT. Prepared ${new Date().toISOString().slice(0,10)}.`,8.5);
+  return k.finish((S.name||'Luminaire')+'  |  data sheet');
+}
+function pdfBrief(){
+  const d=reportData(),k=pdfKit(),a=cur.A,D=S.dec;
+  k.T(k.mg,k.y-6,'MEASUREMENT REQUEST',9,'F2');k.y-=34;k.T(k.mg,k.y,'Goniophotometer test brief',22,'F2');k.y-=16;
+  k.T(k.mg,k.y,`${S.name||'Luminaire'}  |  ${new Date().toISOString().slice(0,10)}  |  for an ISO/IEC 17025 accredited photometric laboratory`,8,'F1');k.y-=10;k.rule(k.y);k.y-=6;
+  k.h2('1. Sample');
+  const smp=[['Luminaire',S.name||'Luminaire'],['Catalogue no.',S.cat||'-'],['Manufacturer',S.manu||'-'],['Rated power',nstr(S.watts,1)+' W'],['CCT / CRI',`${S.cct} K / Ra ${S.cri}`]];
+  if(S.tab==='dec'){const inf=cur.info;smp.push(['Shade',`${D.mode==='mesh'?'custom form':D.preset}, ${nstr(D.H,0)} mm high, material ${D.mat}, inside ${D.inner}`]);if(D.ledLm>0)smp.push(['LED lumens inside',nstr(D.ledLm,0)+' lm (bare source, if known)'])}
+  if(cur.dm)smp.push(['Opening',cur.dm.shape==='point'?'point':cur.dm.shape==='rect'?`${nstr(cur.dm.w*1000,0)} x ${nstr(cur.dm.l*1000,0)} mm`:`D ${nstr(cur.dm.w*1000,0)} mm`+(cur.dm.h?` x ${nstr(cur.dm.h*1000,0)} mm`:'')]);
+  k.kv(smp);
+  k.h2('2. Test conditions requested');
+  ['Method: CIE S 025 / IES LM-79-19, absolute photometry of the complete luminaire, mounted as installed (pendants hanging, light axis vertical).',
+   'Ambient 25 C +/-1 C, no draughts. Stabilise the sample until readings drift less than 0.5 % over 15 minutes before measuring.',
+   'Drive the sample at its rated input. Record input power, current and power factor.',
+   'Goniometer type C. Step: C 5 degrees (all 0-360), gamma 2.5 degrees, so asymmetric patterns, ribs and cut-outs are resolved.',
+   'Colour: spectral measurement, report CCT, CRI Ra and R9, and chromaticity x y.',
+   'Optional: luminance of the visible surface from the side, for glare assessment.'].forEach(t=>k.para('- '+t,9));
+  k.h2('3. Deliverables');
+  ['Test report (PDF) with total luminous flux, power, efficacy, CCT, CRI.','IES file (LM-63-2002) and EULUMDAT file with the measured data.','Photos of the mounted sample and the test set-up.'].forEach(t=>k.para('- '+t,9));
+  k.h2('4. Model prediction to compare against');
+  const dir=(x)=>kfmt(x);
+  k.mono([['Quantity','Predicted','Measured','Diff %'],
+    ['Luminous flux, lm',nstr(a.flux,0),'',''],['Input power, W',nstr(S.watts,1),'',''],['Efficacy, lm/W',S.watts>0?nstr(a.flux/S.watts,0):'-','',''],
+    ['Peak intensity, cd',nstr(a.peak,0),'',''],['Peak direction (gamma/C)',`${nstr(a.pg,0)}/${nstr(a.pc,0)}`,'',''],
+    ['Beam 50 %, C0 deg',bw(a.b50A),'',''],['Beam 50 %, C90 deg',bw(a.b50B),'',''],
+    ['Downward flux, %',nstr(a.down/a.flux*100,0),'',''],['Illuminance at 1 m, lx',dir(a.peak),'',''],['Illuminance at 2 m, lx',dir(a.peak/4),'',''],
+    ['CCT, K',String(S.cct),'',''],['CRI Ra',String(S.cri),'','']],[26,12,12,8],8.5);
+  k.y-=6;
+  k.para('Send the measured luminaire lumens and one illuminance reading (lux, distance, angle from straight down) back. In Candela Bench use "Calibrate to a measurement" to match the shade to the sample, then regenerate the IES file.',9);
+  k.h2('5. Notes for the lab');
+  k.para('This sample is a bespoke decorative luminaire. Report any visible hot spots, flicker or colour variation across the shade. If the shade is translucent, do not mask or paint it. Contact the sender before testing if the sample cannot be hung in its installed orientation.',9);
+  return k.finish((S.name||'Luminaire')+'  |  lab brief');
+}
+$('bLdt').addEventListener('click',()=>{if(cur.P)save(fname()+'_ldt.zip',zipMany([{name:fname()+'.ldt',data:ldtText()}]))});
+$('bSheet').addEventListener('click',()=>{if(!cur.P)return;try{save(fname()+'_datasheet.pdf',pdfSheet())}catch(e){toast('Could not build the data sheet.');console.error(e)}});
+$('bBrief').addEventListener('click',()=>{if(!cur.P)return;try{save(fname()+'_lab_brief.pdf',pdfBrief())}catch(e){toast('Could not build the lab brief.');console.error(e)}});
+
 (async()=>{try{dl=await (window.claude&&window.claude.use?window.claude.use('downloads'):null)}catch(e){dl=null}
-  if(!dl){$('bZip').hidden=true;$('bTxt').hidden=true;$('bProjSave').hidden=true;$('bPdf').hidden=true;$('bXls').hidden=true;$('d3Save').hidden=true}})();
+  if(!dl){$('bZip').hidden=true;$('bTxt').hidden=true;$('bProjSave').hidden=true;$('bPdf').hidden=true;$('bSheet').hidden=true;$('bBrief').hidden=true;$('bLdt').hidden=true;$('bXls').hidden=true;$('d3Save').hidden=true}})();
 
 
 /* ---------------- spec sheet reader ---------------- */
