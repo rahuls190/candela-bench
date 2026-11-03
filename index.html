@@ -839,7 +839,7 @@ function drawIso(){
   }else{
     let hw=bx1>bx0?Math.max(Math.abs(bx0),Math.abs(bx1))*1.1+.1:h;hw=Math.max(hw,.5);u0=-hw;u1=hw;w0=-h;w1=.15*h;
   }
-  const W=Math.max(260,cv.parentElement.clientWidth-28),ml=44,mr=10,mt=10,mb=28,pw=W-ml-mr,ph=clamp(pw*(w1-w0)/(u1-u0),110,560),H=ph+mt+mb;
+  const W=Math.max(260,cv.parentElement.clientWidth-28),ml0=44,mr=10,mt=10,mb=28,availW=W-ml0-mr,sq=Math.min(availW/(u1-u0),520/(w1-w0)),pw=(u1-u0)*sq,ph=(w1-w0)*sq,ml=ml0+(availW-pw)/2,H=ph+mt+mb;
   const c=setupCanvas(cv,W,H);
   const GW=100,GH=Math.max(20,Math.round(GW*ph/pw));
   const grid=[];let Emax=0;
