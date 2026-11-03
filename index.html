@@ -1,11 +1,4 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-</head>
-<body>
-<title>Candela Bench</title>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body><title>Candela Bench</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -253,12 +246,12 @@ const S={
   dist:{profile:'gauss',beamA:40,beamB:40,lock:true,dip:35,tilt:0,azim:0,cutoff:90,up:0},
   opt:{type:'reflector',D:15,A:70,H:50,recess:10,trim:70,q:1.25,spill:5},
   dec:{mode:'linear',preset:'barrel',H:280,dt:150,db:150,bulge:30,mat:'opal',T:55,topOpen:false,botOpen:false,
-       src:'line',srcLen:80,srcPos:50,perf:0,ribs:0,duty:35,dlShare:0,dlBeam:100,custom:'0, 60\n40, 85\n120, 95\n220, 80\n260, 45'},
+       src:'line',srcLen:80,srcPos:50,perf:0,ribs:0,duty:35,dlShare:0,dlBeam:100,R:42,Ts:0,Rs:0,inner:'same',quality:'trace',rays:150,ledLm:0,custom:'0, 60\n40, 85\n120, 95\n220, 80\n260, 45'},
   imp:{text:'',data:null,res:null,fname:''},
-  mh:3,plane:'floor',wx:1.0,planeAng:0,spec:null,
+  mh:3,plane:'floor',wx:1.0,planeAng:0,spec:null,cal:{measLm:0,lux:0,dist:1,ang:0,matched:false},
   room:{L:6,W:4,H:2.8,wp:.75,margin:.5,rod:.6,nx:2,ny:2,rot:0,rc:70,rw:50,rf:20,mf:.8,req:300,show:'wp'}
 };
-const MATS={opal:['Opal glass / acrylic',55],frosted:['Frosted glass',72],fabric:['Fabric',35],paper:['Paper / rice paper',45],smoked:['Smoked glass',30],clear:['Clear acrylic',90],perf:['Perforated metal',3],opaque:['Opaque metal',0]};
+const MATS={opal:['Opal glass / acrylic',50,42,0,0],frosted:['Frosted glass',72,12,5,0],fabric:['Fabric',35,50,0,0],paper:['Paper / rice paper',45,45,0,0],smoked:['Smoked glass',2,2,30,5],clear:['Clear acrylic',0,0,90,4],perf:['Perforated metal',3,60,0,0],opaque:['Opaque metal',0,75,0,0]};
 
 /* ---------------- field schema ---------------- */
 const F={
@@ -292,20 +285,36 @@ const F={
   {k:'dec.bulge',t:'rng',l:'Belly (+) / waist (−), radial',min:-150,max:150,step:1,u:'mm',show:s=>s.dec.mode==='linear'},
   {g:'Shade material'},
   {k:'dec.mat',t:'sel',l:'Material',o:Object.entries(MATS).map(([k,v])=>[k,v[0]]).concat([['custom','Custom']])},
-  {k:'dec.T',t:'rng',l:'Diffuse transmittance',min:0,max:95,step:1,u:'%'},
+  {k:'dec.T',t:'rng',l:'Diffuse transmittance',min:0,max:95,step:.5,u:'%'},
+  {k:'dec.R',t:'rng',l:'Diffuse reflectance',min:0,max:95,step:1,u:'%',adv:true},
+  {k:'dec.Ts',t:'rng',l:'Clear (straight-through) share',min:0,max:99,step:1,u:'%',adv:true},
+  {k:'dec.Rs',t:'rng',l:'Mirror reflectance',min:0,max:99,step:1,u:'%',adv:true},
   {k:'dec.topOpen',t:'chk',l:'Top open'},
   {k:'dec.botOpen',t:'chk',l:'Bottom open'},
+  {k:'dec.inner',t:'sel',l:'Inside finish',o:[['same','Same as shade'],['white','White paint'],['gold','Gold / brass'],['mirror','Mirror'],['black','Black']]},
+  {html:'<div class="note" id="traceNote"></div>'},
   {g:'Light source inside'},
   {k:'dec.src',t:'sel',l:'Source',o:[['line','Vertical LED filament / tube'],['ball','Point / small ball LED']]},
   {k:'dec.srcLen',t:'rng',l:'Filament length',min:0,max:600,step:5,u:'mm',show:s=>s.dec.src==='line'},
   {k:'dec.srcPos',t:'rng',l:'Position along height',min:0,max:100,step:1,u:'%'},
+  {k:'dec.ledLm',t:'num',l:'LED lumens inside the shade (0 = use output below)',min:0,max:50000,step:10,u:'lm'},
   {g:'Pattern'},
   {k:'dec.perf',t:'rng',l:'Perforation (open area)',min:0,max:60,step:1,u:'%'},
   {k:'dec.ribs',t:'rng',l:'Ribs / slats around',min:0,max:36,step:1,u:''},
   {k:'dec.duty',t:'rng',l:'Rib width (share of pitch)',min:5,max:90,step:1,u:'%',show:s=>s.dec.ribs>0},
   {g:'Downlight module in the bottom'},
   {k:'dec.dlShare',t:'rng',l:'Share of output',min:0,max:100,step:1,u:'%'},
-  {k:'dec.dlBeam',t:'rng',l:'Downlight beam angle',min:15,max:150,step:1,u:'°',show:s=>s.dec.dlShare>0}
+  {k:'dec.dlBeam',t:'rng',l:'Downlight beam angle',min:15,max:150,step:1,u:'°',show:s=>s.dec.dlShare>0},
+  {g:'Calibrate to a measurement'},
+  {k:'cal.measLm',t:'num',l:'Measured luminaire lumens',min:0,max:100000,step:10,u:'lm'},
+  {html:'<div class="pre"><button data-act="calLm">Match shade to measured lumens</button></div>'},
+  {k:'cal.lux',t:'num',l:'Measured illuminance',min:0,max:100000,step:1,u:'lx'},
+  {k:'cal.dist',t:'num',l:'at distance',min:.1,max:20,step:.1,u:'m'},
+  {k:'cal.ang',t:'num',l:'at angle from straight down',min:0,max:180,step:1,u:'°'},
+  {html:'<div class="pre"><button data-act="calLux">Match lux at that point</button></div><div class="note" id="calNote"></div>'},
+  {g:'Accuracy',adv:true},
+  {k:'dec.quality',t:'sel',l:'Method',adv:true,o:[['trace','Ray tracing'],['quick','Quick estimate']]},
+  {k:'dec.rays',t:'sel',l:'Ray count',adv:true,o:[['50','50 k, fast'],['150','150 k'],['500','500 k, fine']]}
  ],
  room:[
   {k:'room.L',t:'num',l:'Room length',min:1,max:100,step:.1,u:'m'},
@@ -327,7 +336,7 @@ const F={
   {k:'name',t:'txt',l:'Luminaire name'},
   {k:'manu',t:'txt',l:'Manufacturer / studio'},
   {k:'cat',t:'txt',l:'Catalogue number'},
-  {k:'lumens',t:'num',l:'Luminaire output',min:1,max:200000,step:10,u:'lm',show:s=>s.tab!=='imp'||s.rescale},
+  {k:'lumens',t:'num',l:'Luminaire output',min:1,max:200000,step:10,u:'lm',show:s=>(s.tab!=='imp'||s.rescale)&&!(s.tab==='dec'&&s.dec.ledLm>0&&s.dec.dlShare===0)},
   {k:'watts',t:'num',l:'Input power',min:0,max:5000,step:1,u:'W'},
   {k:'eff',t:'num',l:'Efficacy',min:1,max:300,step:1,u:'lm/W'},
   {k:'cct',t:'num',l:'CCT',min:1800,max:10000,step:100,u:'K'},
@@ -343,6 +352,7 @@ const F={
 };
 function mkField(f,idp){
   const w=document.createElement('div');
+  if(f.html){w.className='fld';w._f=f;w.innerHTML=f.html;return w}
   if(f.g){w.className='grp';w.textContent=f.g;w._f={adv:f.adv,show:f.show};return w}
   w.className='fld';w._f=f;
   const id='f_'+f.k.replace(/\W/g,'_');
@@ -362,7 +372,7 @@ function pushInputs(root){
   root.querySelectorAll('.fld,.grp').forEach(w=>{if(w._f)w.hidden=(w._f.adv&&!S.adv)||(w._f.show?!w._f.show(S):false)});
 }
 
-const ADVK=new Set(['dist.profile','dist.lock','dist.beamB','dist.dip','dist.tilt','dist.azim','dist.cutoff','dist.up','opt.recess','opt.trim','opt.q','opt.spill','dec.bulge','dec.T','dec.topOpen','dec.botOpen','dec.src','dec.srcLen','dec.srcPos','dec.perf','dec.ribs','dec.duty','dec.dlShare','dec.dlBeam','manu','cat','eff','cri','shape','dimW','dimL','dimH','basis','vstep','hstep']);
+const ADVK=new Set(['dist.profile','dist.lock','dist.beamB','dist.dip','dist.tilt','dist.azim','dist.cutoff','dist.up','opt.recess','opt.trim','opt.q','opt.spill','dec.bulge','dec.T','dec.topOpen','dec.botOpen','dec.src','dec.srcLen','dec.srcPos','dec.R','dec.Ts','dec.Rs','dec.quality','dec.rays','dec.perf','dec.ribs','dec.duty','dec.dlShare','dec.dlBeam','manu','cat','eff','cri','shape','dimW','dimL','dimH','basis','vstep','hstep']);
 const ADVG=new Set(['Aim and shielding','Optical quality','Light source inside','Pattern','Downlight module in the bottom']);
 ['dist','opt','dec','out'].forEach(k=>F[k].forEach(f=>{if(f.k&&ADVK.has(f.k))f.adv=true;if(f.g&&ADVG.has(f.g))f.adv=true}));
 /* ---------------- panels ---------------- */
@@ -557,7 +567,7 @@ function profilePts(P){
   }
   return{pts,ok:true};
 }
-function genDec(ax){
+function genDecQuick(ax){
   const P=S.dec,{pts,ok}=profilePts(P),om=cellOmega(ax);
   const zb=pts[0].z,zt=pts[pts.length-1].z,rB=pts[0].r,rT=pts[pts.length-1].r;
   const openT=P.topOpen&&rT>.002,openB=P.botOpen&&rB>.002;
@@ -611,11 +621,253 @@ function genDec(ax){
   let rel;
   if(P.ribs===0){const c0=colFn(0);rel=ax.h.map(()=>c0)}
   else rel=ax.h.map(c=>colFn(c));
+  return{rel,info:{ok,pts,rmax,zb,zt,openT,openB,nP,zs}};
+}
+function genDec(ax){
+  const P=S.dec,om=cellOmega(ax),q=genDecQuick(ax);
+  let rel=q.rel;const info=q.info;info.lor=fluxGrid(rel,om);info.traced=false;info.pending=false;
+  if(P.quality==='trace'){
+    const key=trKey(ax);
+    if(TR.key===key&&TR.res){const r=TR.res;rel=r.rel;Object.assign(info,{lor:r.lor,lorLo:r.lorLo,lorHi:r.lorHi,lorNee:r.lorNee,rays:r.N,traced:true})}
+    else{info.pending=true;ensureTrace(key,ax)}
+  }
   if(P.dlShare>0){
     const hb=P.dlBeam/2*RAD,sh=normGrid(rel,om),dn=normGrid(evalGrid(ax,g=>g<90?Math.exp(-LN2*Math.pow(g*RAD/hb,2)):0),om);
     rel=mixGrids([[1-P.dlShare/100,sh],[P.dlShare/100,dn]]);
   }
-  return{rel,info:{ok,pts,rmax,zb,zt,openT,openB,nP,zs}};
+  return{rel,info};
+}
+
+/* ---------------- ray tracer for the shade ---------------- */
+const FIN={white:[.85,0],gold:[.06,.72],mirror:[0,.9],black:[.05,0]};
+const TR={key:'',runKey:'',res:null,job:0,prog:0,timer:0,busy:false};
+const TB=48,TMIN=1e-7,TOFF=3e-6;
+function mulberry(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function applyMat(key){const m=MATS[key];if(!m)return;const D=S.dec;D.mat=key;D.T=m[1];D.R=m[2];D.Ts=m[3];D.Rs=m[4];if(key==='perf')D.perf=Math.max(D.perf,18)}
+function trKey(ax){const D=S.dec;return JSON.stringify([D.mode,D.H,D.dt,D.db,D.bulge,D.mode==='custom'?D.custom:0,D.T,D.R,D.Ts,D.Rs,D.inner,D.perf,D.ribs,D.duty,D.topOpen,D.botOpen,D.src,D.srcLen,D.srcPos,+D.rays,ax.vs,ax.hs,S.cal.matched?1:0])}
+function trGeom(Q){
+  const pts=Q.pts,segs=[],zb=pts[0].z,zt=pts[pts.length-1].z,rB=pts[0].r,rT=pts[pts.length-1].r;
+  const openT=Q.topOpen&&rT>.002,openB=Q.botOpen&&rB>.002;
+  const ring=(z,r,nz)=>{const n=Math.max(1,Math.ceil(r/.01));for(let i=0;i<n;i++)segs.push({t:1,z,ri:r*i/n,ro:r*(i+1)/n,nz,rm:r*(i+.5)/n,zm:z})};
+  if(!openB&&rB>.002)ring(zb,rB,-1);
+  for(let i=0;i<pts.length-1;i++){
+    const a=pts[i],b=pts[i+1],dz=b.z-a.z,dr=b.r-a.r,l=Math.hypot(dz,dr);if(dz<1e-9||l<1e-9)continue;
+    const n=Math.max(1,Math.ceil(l/.01));
+    for(let j=0;j<n;j++){
+      const z0=a.z+dz*j/n,z1=a.z+dz*(j+1)/n,r0=Math.max(0,a.r+dr*j/n),r1=Math.max(0,a.r+dr*(j+1)/n);
+      if(r0+r1<1e-6)continue;
+      segs.push({t:0,z0,z1,r0,r1,k:(r1-r0)/(z1-z0),nr:dz/l,nz:-dr/l,zm:(z0+z1)/2,rm:(r0+r1)/2});
+    }
+  }
+  if(!openT&&rT>.002)ring(zt,rT,1);
+  const nS=Q.src==='line'&&Q.srcLen>0?7:1,zs=[],zc=zb+(zt-zb)*Q.srcPos/100,len=Q.srcLen/1000;
+  for(let k=0;k<nS;k++)zs.push(zc+(nS>1?(k/(nS-1)-.5)*len:0));
+  return{segs,zs};
+}
+const MT=new Float64Array(4),TH={t:0,i:-1};
+function trMat(Q,phi,inside,o){
+  let Td=Q.T/100,Ts=Q.Ts/100,Rd=Q.R/100,Rs=Q.Rs/100;
+  if(Q.ribs>0){const f=((phi/(2*Math.PI))*Q.ribs+.5)%1;if(Math.abs(f-.5)<Q.duty/200){Td=.02;Ts=0}}
+  if(inside&&Q.inner!=='same'){const fi=FIN[Q.inner];Td=0;Ts=0;Rd=fi[0];Rs=fi[1]}
+  const p=Q.perf/100;if(p>0){Td*=1-p;Rd*=1-p;Rs*=1-p;Ts=Ts*(1-p)+p}
+  const s=Td+Ts+Rd+Rs;if(s>.999){const k=.999/s;Td*=k;Ts*=k;Rd*=k;Rs*=k}
+  o[0]=Td;o[1]=Ts;o[2]=Rd;o[3]=Rs;
+}
+function trHit(G,ox,oy,oz,dx,dy,dz){
+  let best=1e9,bi=-1;const sg=G.segs;
+  for(let i=0;i<sg.length;i++){
+    const s=sg[i];
+    if(s.t===1){
+      if(Math.abs(dz)<1e-12)continue;const t=(s.z-oz)/dz;if(t<=TMIN||t>=best)continue;
+      const x=ox+t*dx,y=oy+t*dy,q=x*x+y*y;if(q>=s.ri*s.ri&&q<=s.ro*s.ro){best=t;bi=i}
+      continue;
+    }
+    const R0=s.r0+s.k*(oz-s.z0),kd=s.k*dz,A=dx*dx+dy*dy-kd*kd,B=2*(ox*dx+oy*dy-R0*kd),C=ox*ox+oy*oy-R0*R0;
+    let t1,t2;
+    if(Math.abs(A)<1e-12){if(Math.abs(B)<1e-14)continue;t1=-C/B;t2=1e9}
+    else{const D=B*B-4*A*C;if(D<0)continue;const sq=Math.sqrt(D),q=-.5*(B+(B<0?-sq:sq));if(q===0)continue;t1=q/A;t2=C/q;if(t1>t2){const x=t1;t1=t2;t2=x}}
+    if(t1>TMIN&&t1<best){const z=oz+t1*dz;if(z>=s.z0-1e-9&&z<=s.z1+1e-9&&R0+t1*kd>=-1e-9){best=t1;bi=i;continue}}
+    if(t2>TMIN&&t2<best){const z=oz+t2*dz;if(z>=s.z0-1e-9&&z<=s.z1+1e-9&&R0+t2*kd>=-1e-9){best=t2;bi=i}}
+  }
+  TH.t=best;TH.i=bi;
+}
+function trNorm(s,x,y){if(s.t===1)return[0,0,s.nz];const l=Math.hypot(x,y)||1;return[s.nr*x/l,s.nr*y/l,s.nz]}
+function trVis(G,Q,ox,oy,oz,dx,dy,dz){ // straight-through transmittance
+  let T=1;
+  for(let it=0;it<8;it++){
+    trHit(G,ox,oy,oz,dx,dy,dz);if(TH.i<0)return T;
+    const t=TH.t,hx=ox+t*dx,hy=oy+t*dy,hz=oz+t*dz,n=trNorm(G.segs[TH.i],hx,hy);
+    const ph=(Math.atan2(hy,hx)+2*Math.PI)%(2*Math.PI);
+    trMat(Q,ph,dx*n[0]+dy*n[1]+dz*n[2]>0,MT);T*=MT[1];if(T<.002)return 0;
+    ox=hx+dx*TOFF;oy=hy+dy*TOFF;oz=hz+dz*TOFF;
+  }
+  return T;
+}
+function trWalkChunk(G,Q,st,n,tal,hist,ax){
+  const rng=st.rng,nz_=G.zs.length,axi=Q.ribs===0,NB=axi?1:TB,nv=ax?ax.v.length:0,nh=ax?ax.h.length:0,TP=2*Math.PI;
+  for(let w=0;w<n;w++){
+    let ox=0,oy=0,oz=G.zs[(st.k++)%nz_];
+    let dz=2*rng()-1,ph=TP*rng(),sz=Math.sqrt(Math.max(0,1-dz*dz)),dx=sz*Math.cos(ph),dy=sz*Math.sin(ph);
+    let diff=false,spec=false,esc=false;
+    for(let b=0;b<22;b++){
+      trHit(G,ox,oy,oz,dx,dy,dz);if(TH.i<0){esc=true;break}
+      const si=TH.i,t=TH.t,hx=ox+t*dx,hy=oy+t*dy,hz=oz+t*dz,s=G.segs[si],nn=trNorm(s,hx,hy);
+      const phi=(Math.atan2(hy,hx)+TP)%TP,dn=dx*nn[0]+dy*nn[1]+dz*nn[2],inside=dn>0;
+      trMat(Q,phi,inside,MT);
+      let u=rng();
+      if(u<MT[1]){ox=hx+dx*TOFF;oy=hy+dy*TOFF;oz=hz+dz*TOFF;continue}
+      u-=MT[1];
+      let side=-1,sgn=1;
+      if(u<MT[0]){side=inside?0:1;sgn=inside?1:-1;diff=true}
+      else{u-=MT[0];
+        if(u<MT[2]){side=inside?1:0;sgn=inside?-1:1;diff=true}
+        else{u-=MT[2];
+          if(u<MT[3]){const k=2*dn;dx-=k*nn[0];dy-=k*nn[1];dz-=k*nn[2];const sg=inside?-1:1;ox=hx+sg*nn[0]*TOFF;oy=hy+sg*nn[1]*TOFF;oz=hz+sg*nn[2]*TOFF;spec=true;continue}
+          break; // absorbed
+        }
+      }
+      if(tal){const bin=NB>1?Math.min(NB-1,(phi/TP*NB)|0):0;tal[(si*2+side)*NB+bin]++}
+      // cosine hemisphere about emerging normal
+      const ex=sgn*nn[0],ey=sgn*nn[1],ez=sgn*nn[2];
+      let ax_=0,ay_=0,az_=0;if(Math.abs(ez)<.9)az_=1;else ax_=1;
+      let tx=ay_*ez-az_*ey,ty=az_*ex-ax_*ez,tz=ax_*ey-ay_*ex;const tl=Math.hypot(tx,ty,tz);tx/=tl;ty/=tl;tz/=tl;
+      const bx=ey*tz-ez*ty,by=ez*tx-ex*tz,bz=ex*ty-ey*tx;
+      const u1=rng(),r=Math.sqrt(u1),a2=TP*rng(),lx=r*Math.cos(a2),ly=r*Math.sin(a2),lz=Math.sqrt(1-u1);
+      dx=lx*tx+ly*bx+lz*ex;dy=lx*ty+ly*by+lz*ey;dz=lx*tz+ly*bz+lz*ez;
+      ox=hx+ex*TOFF;oy=hy+ey*TOFF;oz=hz+ez*TOFF;
+    }
+    if(esc){
+      st.esc++;
+      if(!diff&&spec&&hist){
+        const g=Math.acos(clamp(-dz,-1,1))/RAD,iv=clamp(Math.round(g/ax.vs),0,nv-1);
+        if(axi)hist[iv]++;else{const c=((Math.atan2(dy,dx)/RAD)+360)%360,ih=Math.round(c/ax.hs)%nh;hist[ih*nv+iv]++}
+      }
+    }
+  }
+}
+function trBlur(h,nh,nv,axi){
+  if(axi){const o=new Float64Array(nv);for(let i=0;i<nv;i++)o[i]=.25*h[Math.max(0,i-1)]+.5*h[i]+.25*h[Math.min(nv-1,i+1)];return o}
+  const o=new Float64Array(nh*nv),k=[.25,.5,.25];
+  for(let j=0;j<nh;j++)for(let i=0;i<nv;i++){let s=0;for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++){const jj=(j+a+nh)%nh,ii=clamp(i+b,0,nv-1);s+=k[a+1]*k[b+1]*h[jj*nv+ii]}o[j*nv+i]=s}
+  return o;
+}
+function* trFar(G,Q,ax,tal,hist,N){
+  const nv=ax.v.length,nh=ax.h.length,om=cellOmega(ax),axi=Q.ribs===0,NB=axi?1:TB,TP=2*Math.PI,VQ=24;
+  const P={x:[],y:[],z:[],nx:[],ny:[],nz:[],w:[]};
+  const addP=(s,sgn,phi,c)=>{
+    const cp=Math.cos(phi),sp=Math.sin(phi);P.x.push(s.rm*cp);P.y.push(s.rm*sp);P.z.push(s.zm);
+    if(s.t===1){P.nx.push(0);P.ny.push(0);P.nz.push(sgn*s.nz)}else{P.nx.push(sgn*s.nr*cp);P.ny.push(sgn*s.nr*sp);P.nz.push(sgn*s.nz)}
+    P.w.push(c/N/Math.PI);
+  };
+  for(let i=0;i<G.segs.length;i++)for(let side=0;side<2;side++)for(let b=0;b<NB;b++){
+    const c=tal[(i*2+side)*NB+b];if(!c)continue;const sgn=side?-1:1;
+    if(axi)for(let q=0;q<VQ;q++)addP(G.segs[i],sgn,(q+.5)/VQ*TP,c/VQ);else addP(G.segs[i],sgn,(b+.5)/NB*TP,c);
+  }
+  const np=P.w.length;
+  // columns to compute
+  const rep=new Array(nh);
+  if(axi){for(let j=0;j<nh;j++)rep[j]=0}
+  else{const per=360/Q.ribs;for(let j=0;j<nh;j++){const m=((ax.h[j]%per)+per)%per;let k=Math.round(m/ax.hs);if(Math.abs(k*ax.hs-m)>1e-6)k=j;else if(k*ax.hs>=per-1e-6)k=0;rep[j]=k}}
+  const canon=[...new Set(rep)].sort((a,b)=>a-b);
+  const hb=trBlur(hist,nh,nv,axi),rel=new Array(nh);
+  let done=0;
+  for(const j of canon){
+    const C=ax.h[j]*RAD,col=new Array(nv);
+    for(let i=0;i<nv;i++){
+      const g=ax.v[i]*RAD,sg=Math.sin(g),dx=sg*Math.cos(C),dy=sg*Math.sin(C),dz=-Math.cos(g);
+      let I=0;
+      for(const z0 of G.zs)I+=trVis(G,Q,0,0,z0,dx,dy,dz);
+      I/=G.zs.length*4*Math.PI;
+      for(let p=0;p<np;p++){
+        const d=P.nx[p]*dx+P.ny[p]*dy+P.nz[p]*dz;if(d<=0)continue;
+        I+=P.w[p]*d*trVis(G,Q,P.x[p]+P.nx[p]*TOFF,P.y[p]+P.ny[p]*TOFF,P.z[p]+P.nz[p]*TOFF,dx,dy,dz);
+      }
+      I+=axi?hb[i]/(N*om[i]*nh):hb[j*nv+i]/(N*om[i]);
+      col[i]=I;
+    }
+    rel[j]=col;done++;yield .5+.5*done/canon.length;
+  }
+  for(let j=0;j<nh;j++)if(!rel[j])rel[j]=rel[rep[j]];
+  return rel;
+}
+function* trLor(Q,N,seed){
+  const G=trGeom(Q),st={rng:mulberry(seed),esc:0,k:0};let d=0;
+  while(d<N){const n=Math.min(4000,N-d);trWalkChunk(G,Q,st,n,null,null,null);d+=n;yield d/N}
+  return st.esc/N;
+}
+function* trMain(Q,ax){
+  const G=trGeom(Q),N=(+Q.rays)*1000,st={rng:mulberry(12345),esc:0,k:0},axi=Q.ribs===0,NB=axi?1:TB,nv=ax.v.length,nh=ax.h.length;
+  const tal=new Float64Array(G.segs.length*2*NB),hist=new Float64Array(axi?nv:nh*nv);
+  let done=0;
+  while(done<N){const n=Math.min(4000,N-done);trWalkChunk(G,Q,st,n,tal,hist,ax);done+=n;yield .5*done/N*.9}
+  const rel=yield* trFar(G,Q,ax,tal,hist,N);
+  const om=cellOmega(ax),lorNee=fluxGrid(rel,om),lor=st.esc/N,sc=f=>{let T=Q.T*f,R=Q.R*f;const room=98-Q.Ts-Q.Rs,sum=T+R;if(sum>room&&sum>0){T*=room/sum;R*=room/sum}return Object.assign({},Q,{T,R})};
+  const lo=yield* trLor(sc(1-Q.unc),30000,99),hi=yield* trLor(sc(1+Q.unc),30000,99);
+  return{rel,lor,lorNee,lorLo:Math.min(lo,lor),lorHi:Math.max(hi,lor),N};
+}
+function slice(gen,live,onProg,onDone){
+  const step=()=>{
+    if(!live())return;const t0=performance.now();let r;
+    do{r=gen.next()}while(!r.done&&performance.now()-t0<24);
+    if(r.done){onDone(r.value);return}
+    onProg(r.value);TR.timer=setTimeout(step,0);
+  };
+  step();
+}
+function noteTrace(){
+  const e=$('traceNote');if(!e||S.tab!=='dec')return;const inf=cur&&cur.info;
+  if(S.dec.quality!=='trace')e.textContent='Quick estimate: first-order model. Clear, mirror and gold finishes need ray tracing.';
+  else if(TR.busy||(inf&&inf.pending))e.textContent=`Ray tracing… ${Math.round(TR.prog*100)} % (quick estimate shown meanwhile)`;
+  else if(inf&&inf.traced)e.textContent=`Ray traced with ${nstr(inf.rays/1000,0)}k rays. Shade LOR ${nstr(inf.lor*100,1)} % (field integral ${nstr(inf.lorNee*100,1)} %).`;
+}
+function ensureTrace(key,ax){
+  if(TR.runKey===key)return;
+  TR.runKey=key;clearTimeout(TR.timer);const job=++TR.job;TR.busy=true;TR.prog=0;
+  TR.timer=setTimeout(()=>{
+    if(job!==TR.job)return;
+    const Q=Object.assign({},S.dec,{pts:profilePts(S.dec).pts,unc:S.cal.matched?.05:.15});
+    const axc={v:ax.v.slice(),h:ax.h.slice(),vs:ax.vs,hs:ax.hs};
+    slice(trMain(Q,axc),()=>job===TR.job,p=>{TR.prog=p;noteTrace()},res=>{TR.key=key;TR.res=res;TR.busy=false;schedule()});
+  },250);
+}
+/* calibration */
+let CAL=0;
+function calMsg(t,err){const e=$('calNote');if(e){e.textContent=t;e.style.color=err?'#b3261e':''}}
+function calLm(){
+  const D=S.dec,c=S.cal;
+  if(!(D.ledLm>0)||!(c.measLm>0)){calMsg('Enter the LED lumens inside the shade and the measured luminaire lumens first.',true);return}
+  const target=c.measLm/D.ledLm,Q0=Object.assign({},D,{pts:profilePts(D).pts}),job=++CAL;
+  calMsg('Matching… 0 %');
+  const gen=(function*(){
+    const f=T=>Object.assign({},Q0,{T});
+    const hi=Math.max(2,99-Q0.R-Q0.Ts-Q0.Rs);
+    const lHi=yield* trLor(f(hi),20000,777);
+    if(lHi<target)return{T:hi,lor:lHi,lim:'max'};
+    const lLo=yield* trLor(f(0),20000,777);
+    if(lLo>target)return{T:0,lor:lLo,lim:'min'};
+    let a=0,b=hi,mid=hi/2,lm=lLo;
+    for(let k=0;k<11;k++){mid=(a+b)/2;lm=yield* trLor(f(mid),20000,777);if(lm<target)a=mid;else b=mid}
+    return{T:mid,lor:lm};
+  })();
+  let n=0;
+  slice(gen,()=>job===CAL,()=>{n++;calMsg(`Matching… ${Math.min(95,Math.round(n/3))} %`)},r=>{
+    D.T=+r.T.toFixed(1);D.mat='custom';c.matched=true;
+    if(r.lim)calMsg(`Cannot reach ${nstr(c.measLm,0)} lm: the ${r.lim==='max'?'highest':'lowest'} possible with this shape and finish is ${nstr(D.ledLm*r.lor,0)} lm. Shade set to ${D.T} %.`,true);
+    else calMsg(`Shade transmittance set to ${D.T} %. Model output ${nstr(D.ledLm*r.lor,0)} lm vs measured ${nstr(c.measLm,0)} lm.`);
+    schedule();
+  });
+}
+function calLux(){
+  const D=S.dec,c=S.cal;
+  if(!(c.lux>0)||!(c.dist>0)||!cur.P){calMsg('Enter the measured lux and the distance first.',true);return}
+  const Im=c.lux*c.dist*c.dist,Imod=cdAt(cur.P,c.ang,0);
+  if(!(Imod>0)){calMsg('The model gives no light at that angle.',true);return}
+  const k=Im/Imod;
+  if(D.ledLm>0&&D.dlShare===0)D.ledLm=Math.max(1,Math.round(D.ledLm*k));
+  else{S.lumens=Math.max(1,Math.round(S.lumens*k));if(S.watts>0)S.eff=+(S.lumens/S.watts).toFixed(1)}
+  c.matched=true;
+  calMsg(`Output scaled ×${k.toFixed(2)} so the model gives ${nstr(Im,0)} cd at ${c.ang}° (${nstr(c.lux,0)} lx at ${c.dist} m).`);
+  schedule();
 }
 
 /* ---------------- luminous opening dims and area ---------------- */
@@ -760,10 +1012,11 @@ function compute(){
     const{vs,hs}=autoSteps(),ax=makeAxes(vs,hs),om=cellOmega(ax);
     let g;
     if(S.tab==='dist')g=genDist(ax);else if(S.tab==='opt')g=genOpt(ax);else g=genDec(ax);
-    info=g.info;
+    info=g.info;cur.autoLm=false;
+    if(S.tab==='dec'&&S.dec.ledLm>0&&S.dec.dlShare===0&&info.lor>0){S.lumens=Math.max(1,Math.round(S.dec.ledLm*info.lor));if(S.watts>0)S.eff=+(S.lumens/S.watts).toFixed(1);M.lumens=S.lumens;cur.autoLm=true}
     const nrm=normGrid(g.rel,om),cd=nrm.map(r=>r.map(x=>x*S.lumens));
     P=reduceSym(ax,cd);
-    M.note=S.tab==='dist'?`Profile model ${S.dist.profile}, beam ${S.dist.beamA}/${S.dist.lock?S.dist.beamA:S.dist.beamB} deg.`:S.tab==='opt'?`Optical estimate: ${S.opt.type}, LED ${S.opt.D} mm, exit ${S.opt.A} mm.`:`Decorative lamp model: ${S.dec.preset||'custom'} shade, ${S.dec.mat}.`;
+    M.note=S.tab==='dist'?`Profile model ${S.dist.profile}, beam ${S.dist.beamA}/${S.dist.lock?S.dist.beamA:S.dist.beamB} deg.`:S.tab==='opt'?`Optical estimate: ${S.opt.type}, LED ${S.opt.D} mm, exit ${S.opt.A} mm.`:`Decorative lamp model: ${S.dec.preset||'custom'} shade, ${S.dec.mat}${info&&info.traced?', ray traced, shade LOR '+nstr(info.lor*100,0)+' %':''}.`;
   }
   const dm=dimsM(info);M.dims=dm;
   const text=writeIES(P,M);
@@ -916,6 +1169,7 @@ function renderMetrics(){
     ['Down / up',`${nstr(a.down/a.flux*100,0)} / ${nstr(a.up/a.flux*100,0)} %`,'DLOR / ULOR'],
     ['Efficacy',S.watts>0?nstr(eff,0)+' lm/W':'–',`${nstr(S.watts,1)} W`]
   ];
+  const inf=cur.info;if(S.tab==='dec'&&inf&&inf.lor!=null)items.splice(5,0,['Shade LOR',nstr(inf.lor*100,0)+' %',inf.traced?`range ${nstr(inf.lorLo*100,0)}–${nstr(inf.lorHi*100,0)} % · ray traced`:inf.pending?'tracing…':'quick estimate']);
   const bm=a.b50A>=355?'wide, all-round light':`beam ${nstr(a.b50A,0)}°${Math.abs(a.b50A-a.b50B)>2?' × '+nstr(a.b50B,0)+'°':''}`;
   $('sumText').textContent=`${S.name||'Luminaire'}: ${nstr(a.flux,0)} lm${S.watts>0?`, ${nstr(S.watts,0)} W (${nstr(eff,0)} lm/W)`:''}, ${S.cct} K. ${bm}, ${nstr(a.down/a.flux*100,0)} % of the light goes down.`;
   $('metrics').innerHTML=items.map(i=>`<div class="m"><i>${i[0]}</i><b>${i[1]}</b><em>${i[2]}</em></div>`).join('');
@@ -969,7 +1223,7 @@ function update(){
     ROOM=null;R3.scene=null;renderRoomResults();renderSpecChecks();$('ies').textContent='';$('val').textContent='';$('axial').textContent='';$('glare').textContent='';$('cdTable').textContent='';
     cur={P:null};return;
   }
-  cur=Object.assign(cur,out);cur.A=analyse(out.P);cur.parse=parseIES(out.text);
+  cur=Object.assign(cur,out);if(cur.autoLm)pushInputs(document);noteTrace();cur.A=analyse(out.P);cur.parse=parseIES(out.text);
   renderDerived();renderMetrics();renderTables();renderCdTable();renderIES();renderOutNote();lampSvg();build3D();ROOM=calcRoom();buildRoomScene();renderRoomResults();drawPlots();renderSpecChecks();
   const a=cur.A;
   if(S.tab!=='imp'){const f=Math.abs(a.flux-S.lumens)/S.lumens;cur.parse.info.push(`Flux in the table integrates to ${nstr(a.flux,0)} lm against ${nstr(S.lumens,0)} lm requested (${nstr(f*100,1)} % difference from grid sampling).`);renderIES()}
@@ -983,8 +1237,8 @@ function onInput(ev){
   setPath(S,k,v);
   if(k==='lumens'||k==='watts'){S.eff=S.watts>0?+(S.lumens/S.watts).toFixed(1):S.eff}
   if(k==='eff'){S.lumens=Math.round(S.eff*S.watts)}
-  if(k==='dec.mat'&&v!=='custom'){S.dec.T=MATS[v][1];if(v==='perf')S.dec.perf=Math.max(S.dec.perf,18)}
-  if(k==='dec.T'){S.dec.mat='custom'}
+  if(k==='dec.mat'&&v!=='custom'){applyMat(v);S.cal.matched=false}
+  if(['dec.T','dec.R','dec.Ts','dec.Rs'].includes(k)){S.dec.mat='custom';S.cal.matched=false}
   if(['dec.H','dec.dt','dec.db','dec.bulge'].includes(k)&&S.dec.mode!=='custom'){S.dec.preset=S.dec.preset||'custom'}
   if(k==='dist.lock'&&v)S.dist.beamB=S.dist.beamA;
   document.querySelectorAll(`[data-k="${k}"]`).forEach(o=>{if(o!==el){if(o.type==='checkbox')o.checked=v;else o.value=v}});
@@ -996,7 +1250,9 @@ document.addEventListener('click',ev=>{
   const b=ev.target.closest('button');if(!b)return;
   if(b.dataset.tab){S.tab=b.dataset.tab;if(S.tab==='dist'&&!S.name)S.name='Downlight';schedule();return}
   if(b.dataset.act==='dpre'){const p=PRESETS.dist[+b.dataset.v][1];Object.assign(S.dist,{dip:35},p);schedule();return}
-  if(b.dataset.act==='cpre'){const key=PRESETS.dec[+b.dataset.v][1];Object.assign(S.dec,DEC[key],{preset:key,dlShare:0});schedule();return}
+  if(b.dataset.act==='calLm'){calLm();return}
+  if(b.dataset.act==='calLux'){calLux();return}
+  if(b.dataset.act==='cpre'){const key=PRESETS.dec[+b.dataset.v][1];Object.assign(S.dec,DEC[key],{preset:key,dlShare:0});applyMat(DEC[key].mat);S.cal.matched=false;schedule();return}
   if(b.dataset.plane){S.plane=b.dataset.plane;document.querySelectorAll('#planeSeg button').forEach(x=>x.setAttribute('aria-pressed',x===b));schedule();return}
   if(b.id==='toPts'){const{pts}=profilePts(S.dec);S.dec.custom=pts.filter((_,i)=>i%2===0||i===pts.length-1).map(p=>`${nstr(p.z*1000,1)}, ${nstr(p.r*1000,1)}`).join('\n');S.dec.mode='custom';S.dec.preset='custom';$('decCustom').value=S.dec.custom;schedule();return}
   if(b.id==='impLoad'){loadImport($('impText').value,'pasted text');return}
@@ -1141,8 +1397,7 @@ function applySpec(sp,via){
     if(!sp.dia)A.push('No diameter found, default shade size used.');
     const mt=(sp.material||'')+' '+(sp.translucent?'translucent':'');
     S.dec.mat=/frost/i.test(mt)?'frosted':/fabric|textile/i.test(mt)?'fabric':/paper/i.test(mt)?'paper':/perforat/i.test(mt)?'perf':'opal';
-    S.dec.T=S.dec.mat==='perf'?3:S.dec.mat==='frosted'?72:S.dec.mat==='fabric'?35:S.dec.mat==='paper'?45:50;
-    if(S.dec.mat==='perf')S.dec.perf=18;
+    applyMat(S.dec.mat);
     A.push(`Shade material read as ${MATS[S.dec.mat][0].toLowerCase()}, ${S.dec.T} % transmittance. Check against the sample.`);
     if(sp.tubeW){S.dec.src='line';S.dec.srcLen=Math.round(clamp(S.dec.H*.7,0,S.dec.H-60));S.dec.srcPos=55;A.push(`LED tube modelled as a ${S.dec.srcLen} mm vertical filament at 55 % of the height.`)}
     else{S.dec.src='ball';A.push('No inner source named, a point source in the middle of the shade is used.')}
@@ -1501,7 +1756,7 @@ const TILES=[
     const rs=()=>{S.dist.dip=35;S.dist.tilt=0;S.dist.azim=0;S.dist.cutoff=90;S.dist.up=0;S.dist.lock=true};
     if(id==='spec'){$('specCard').open=true;$('specCard').scrollIntoView({block:'nearest',behavior:'smooth'})}
     else if(id==='down'){S.tab='dist';rs();Object.assign(S.dist,{profile:'gauss',beamA:60,beamB:60});S.name='Downlight';S.shape='circle';S.dimW=100;S.dimH=0;S.lumens=1000;S.watts=10;S.eff=100}
-    else if(id==='pend'){S.tab='dec';Object.assign(S.dec,DEC.drum,{preset:'drum',dlShare:0,ribs:0,perf:0,src:'line',srcLen:80,srcPos:50});S.name='Pendant';S.lumens=800;S.watts=10;S.eff=80}
+    else if(id==='pend'){S.tab='dec';Object.assign(S.dec,DEC.drum,{preset:'drum',dlShare:0,ribs:0,perf:0,src:'line',srcLen:80,srcPos:50});applyMat(DEC.drum.mat);S.name='Pendant';S.lumens=800;S.watts=10;S.eff=80}
     else if(id==='lin'){S.tab='dist';rs();Object.assign(S.dist,PRESETS.dist[4][1]);S.name='Linear light';S.shape='rect';S.dimW=60;S.dimL=1200;S.dimH=0;S.lumens=2400;S.watts=24;S.eff=100}
     else if(id==='wall'){S.tab='dist';rs();Object.assign(S.dist,PRESETS.dist[3][1]);S.name='Wall washer';S.shape='rect';S.dimW=120;S.dimL=120;S.dimH=0;S.lumens=1200;S.watts=15;S.eff=80}
     else if(id==='ies'){S.tab='imp';S.name='Imported luminaire'}
@@ -1513,8 +1768,7 @@ const TILES=[
 
 /* ---------------- boot ---------------- */
 $('decCustom').value=S.dec.custom;
+applyMat(S.dec.mat);
 update();
 </script>
-
-</body>
-</html>
+</body></html>

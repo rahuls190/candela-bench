@@ -16,3 +16,7 @@ Open `index.html` in a browser, no build step.
 - Outside Claude, the Save buttons are hidden (use Copy text) and reading spec screenshots is unavailable; pasted spec text still works.
 
 `examples/D1_Pendant_Bespoke.ies` was generated from a pendant spec sheet (1250 lm, 25 W, 3000 K, Ø300 × 565 mm).
+
+## Lamp mode: ray-traced shade
+
+The decorative-lamp model now traces rays inside the shade (diffuse and clear transmission, diffuse and mirror reflection, perforation, ribs, inside finishes) and reports the shade LOR with an uncertainty range. A material library sets transmittance and reflectance, and two calibration buttons match the model to a measured luminaire lumen value or a lux reading at one point.
