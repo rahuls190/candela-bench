@@ -20,3 +20,7 @@ Open `index.html` in a browser, no build step.
 ## Lamp mode: ray-traced shade
 
 The decorative-lamp model now traces rays inside the shade (diffuse and clear transmission, diffuse and mirror reflection, perforation, ribs, inside finishes) and reports the shade LOR with an uncertainty range. A material library sets transmittance and reflectance, and two calibration buttons match the model to a measured luminaire lumen value or a lux reading at one point.
+
+## Reports
+
+"Report (PDF)" and "Report (Excel)" export the key metrics, polar curve, illuminance map, 3D view, axial and glare tables, room results, candela table and IES checks.
