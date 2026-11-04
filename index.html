@@ -125,7 +125,7 @@ svg.lamp text{font:400 10px var(--f-mono);fill:var(--mute)}
 <div class="wrap">
 <header class="top">
   <div>
-    <h1>Candela Bench <small>v2.1</small></h1>
+    <h1>Candela Bench <small>v2.2</small></h1>
     <p class="sub">Pick a fixture, adjust a few settings, check the light, and save an IES file.</p>
   </div>
   <span class="badge">Computed photometry · not LM-79 lab data</span>
@@ -1510,7 +1510,7 @@ function zipStore(name,text){
   return new Blob([lh,nm,data,ch,nm,ed],{type:'application/zip'});
 }
 async function save(filename,data){
-  if(!dl){toast('Saving is not available in this view, use Copy text.');return}
+  if(!dl){try{const b=data instanceof Blob?data:new Blob([data],{type:'text/plain'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);toast('Downloaded '+filename)}catch(e){toast('Could not download. Use Copy text.')}return}
   try{const r=await dl.save({filename,data});toast(r.status==='saved'?'Saved '+filename:'Sent')}
   catch(e){toast(e&&e.code==='declined'?'Save cancelled.':'Could not save ('+(e&&e.code||'error')+').')}
 }
@@ -1901,7 +1901,7 @@ $('bSheet').addEventListener('click',()=>{if(!cur.P)return;try{save(fname()+'_da
 $('bBrief').addEventListener('click',()=>{if(!cur.P)return;try{save(fname()+'_lab_brief.pdf',pdfBrief())}catch(e){toast('Could not build the lab brief.');console.error(e)}});
 
 (async()=>{try{dl=await (window.claude&&window.claude.use?window.claude.use('downloads'):null)}catch(e){dl=null}
-  if(!dl){$('bZip').hidden=true;$('bTxt').hidden=true;$('bProjSave').hidden=true;$('bPdf').hidden=true;$('bSheet').hidden=true;$('bBrief').hidden=true;$('bLdt').hidden=true;$('bXls').hidden=true;$('d3Save').hidden=true}})();
+  if(!dl){$('d3Save').hidden=false}})();
 
 
 /* ---------------- spec sheet reader ---------------- */
